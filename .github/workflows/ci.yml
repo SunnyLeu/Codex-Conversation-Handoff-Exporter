@@ -52,9 +52,7 @@ jobs:
           restore-keys: |
             cargo-registry-${{ runner.os }}-
 
-      # 公開來源仍有既有 rustfmt 差異；先顯示結果，另行整理後才改成阻擋檢查。
-      - name: 檢查 Rust 格式（暫不阻擋）
-        continue-on-error: true
+      - name: 檢查 Rust 格式
         run: cargo fmt --all -- --check
 
       - name: 執行 Rust 單元測試

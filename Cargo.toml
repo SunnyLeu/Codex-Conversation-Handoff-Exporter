@@ -1,6 +1,6 @@
 [package]
 name = "codex-conversation-handoff-exporter"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 rust-version = "1.98"
 publish = false
@@ -26,6 +26,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sonic-rs = "0.5.8"
 sha2 = "0.11"
+# Native libzstd is built statically by zstd-sys from the Cargo registry.
+# Never use pkg-config, dynamic DLLs, or the experimental bindgen feature.
+zstd = { version = "0.14", default-features = false, features = ["vendored", "no_asm"] }
 walkdir = "2"
 windows-sys = { version = "=0.61.2", features = ["Win32_UI_Shell", "Win32_System_Console", "Win32_System_Threading", "Win32_System_Com", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging"] }
 

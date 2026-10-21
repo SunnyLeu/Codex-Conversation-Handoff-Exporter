@@ -1,27 +1,10 @@
 use std::env;
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
-
-const ZSTD_BASE: &str = "third_party/zstd-1.5.7/lib";
-const C_FILES: &[&str] = &[
-    "common/debug.c",
-    "common/entropy_common.c",
-    "common/error_private.c",
-    "common/fse_decompress.c",
-    "common/pool.c",
-    "common/threading.c",
-    "common/xxhash.c",
-    "common/zstd_common.c",
-    "decompress/huf_decompress.c",
-    "decompress/zstd_ddict.c",
-    "decompress/zstd_decompress.c",
-    "decompress/zstd_decompress_block.c",
-];
 
 fn run(command: &mut Command, description: &str) {
     let output = command.output().unwrap_or_else(|error| {
-        panic!("Failed to start {description}: {error}. A C compiler is required to build the embedded Zstandard decoder.")
+        panic!("Failed to start {description}: {error}. The MSVC C++ toolchain is required for Windows native resources.")
     });
     if !output.status.success() {
         panic!(
@@ -47,111 +30,6 @@ fn msvc_command(target: &str, tool: &str) -> Command {
              You can also run this build from an x64 Native Tools Command Prompt."
         )
     })
-}
-
-fn build_zstd() {
-    let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
-    let target = env::var("TARGET").expect("TARGET");
-    println!("cargo:rerun-if-changed={ZSTD_BASE}");
-    println!("cargo:rerun-if-changed=third_party/zstd-1.5.7/SOURCE-PROVENANCE.txt");
-
-    let windows = target.contains("windows-msvc");
-    // Rust's x86_64-pc-windows-msvc default uses the DLL CRT (/MD).
-    // If Rust explicitly enables +crt-static, match it with /MT instead.
-    // Without an explicit option MSVC cl.exe defaults to /MT and the linker
-    // warns LNK4098 (LIBCMT vs MSVCRT). Do NOT suppress this with NODEFAULTLIB.
-    let rust_crt_static = env::var("CARGO_CFG_TARGET_FEATURE")
-        .unwrap_or_default()
-        .split(',')
-        .any(|feature| feature == "crt-static");
-    let crt_option = if rust_crt_static { "/MT" } else { "/MD" };
-    if target.contains("windows") && !windows {
-        panic!("The bundled decoder supports Windows MSVC only (requested target: {target})");
-    }
-    let mut objects = Vec::new();
-    for (index, source) in C_FILES.iter().enumerate() {
-        let file = Path::new(ZSTD_BASE).join(source);
-        assert!(
-            file.is_file(),
-            "Bundled Zstandard C source missing: {}",
-            file.display()
-        );
-        let object = out_dir.join(format!(
-            "zstd_{index:02}.{}",
-            if windows { "obj" } else { "o" }
-        ));
-        let mut command = if windows {
-            #[cfg(windows)]
-            {
-                msvc_command(&target, "cl.exe")
-            }
-            #[cfg(not(windows))]
-            {
-                panic!("MSVC cross-compilation is unsupported on a non-Windows host")
-            }
-        } else {
-            Command::new(env::var_os("CC").unwrap_or_else(|| OsStr::new("cc").to_os_string()))
-        };
-        if windows {
-            command
-                .arg("/nologo")
-                .arg("/c")
-                .arg("/O2")
-                .arg(crt_option)
-                .arg("/DZSTD_DISABLE_ASM=1")
-                .arg("/DZSTD_LEGACY_SUPPORT=0")
-                .arg(format!("/I{ZSTD_BASE}"))
-                .arg(format!("/I{ZSTD_BASE}/common"))
-                .arg(format!("/I{ZSTD_BASE}/decompress"))
-                .arg(format!("/Fo{}", object.display()))
-                .arg(&file);
-        } else {
-            command
-                .arg("-O2")
-                .arg("-fPIC")
-                .arg("-DZSTD_DISABLE_ASM=1")
-                .arg("-DZSTD_LEGACY_SUPPORT=0")
-                .arg(format!("-I{ZSTD_BASE}"))
-                .arg(format!("-I{ZSTD_BASE}/common"))
-                .arg(format!("-I{ZSTD_BASE}/decompress"))
-                .arg("-c")
-                .arg(&file)
-                .arg("-o")
-                .arg(&object);
-        }
-        run(
-            &mut command,
-            &format!("building embedded Zstandard {source}"),
-        );
-        objects.push(object);
-    }
-    let lib = out_dir.join(if windows { "zstd.lib" } else { "libzstd.a" });
-    let mut archive = if windows {
-        #[cfg(windows)]
-        {
-            msvc_command(&target, "lib.exe")
-        }
-        #[cfg(not(windows))]
-        {
-            panic!("MSVC cross-compilation is unsupported on a non-Windows host")
-        }
-    } else {
-        Command::new(env::var_os("AR").unwrap_or_else(|| OsStr::new("ar").to_os_string()))
-    };
-    if windows {
-        archive
-            .arg("/nologo")
-            .arg(format!("/OUT:{}", lib.display()));
-    } else {
-        archive.arg("rcs").arg(&lib);
-    }
-    archive.args(&objects);
-    run(
-        &mut archive,
-        "archiving the embedded Zstandard static library",
-    );
-    println!("cargo:rustc-link-search=native={}", out_dir.display());
-    println!("cargo:rustc-link-lib=static=zstd");
 }
 
 #[cfg(windows)]
@@ -198,7 +76,6 @@ fn main() {
     }
     // Non-Windows compilation is retained solely for internal core tests; it
     // does not provide a supported desktop application on those platforms.
-    build_zstd();
     println!("cargo:rerun-if-changed=native/folder_picker.cpp");
     #[cfg(windows)]
     build_folder_picker();

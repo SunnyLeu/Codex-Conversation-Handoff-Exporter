@@ -10,15 +10,15 @@
 在本儲存庫的 [Releases](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/releases)
 下載 Windows x64 套件：
 
-`Codex-Conversation-Handoff-Exporter-2.0.0-windows-x64.zip`
+`Codex-Conversation-Handoff-Exporter-2.0.1-windows-x64.zip`
 
 解壓後執行 `Codex-Conversation-Handoff-Exporter.exe`。
 EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔，可以移至自己偏好的位置。
-一般使用不需 Python、Rust、Windows SDK 或 .NET；C/C++ 執行階段及 Zstandard 解碼器採靜態連結。
+一般使用不需 Python、Rust、Windows SDK 或 .NET；C/C++ 執行階段及 Cargo 管理的 Zstandard 解碼器採靜態連結。
 Windows 自帶的系統 DLL 仍為必要元件。重新散布時請保留套件內的授權聲明。
 
 **平台範圍：僅支援 Windows x64（x86-64／AMD64）。**
-原生驗收使用 Windows 11 x64；不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
+2.0.0 已通過 Windows 11 x64 發行驗收；2.0.1 已完成 Windows x64 發行驗收。不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
 其他 Windows 版本尚未完成驗證。EXE、Codex 資料、系統暫存目錄與輸出位置仍受 Windows 存取權限限制。
 
 ## 基本操作
@@ -115,7 +115,7 @@ Handoff 不是 Codex 原始資料夾備份，也不是可匯入 Codex 的官方�
 
 請在 Windows x64 安裝 **Rust 1.98.0 或更新版本的 MSVC 工具鏈**，
 以及 Visual Studio C++ Build Tools（MSVC x64 工具集與 Windows SDK）。
-本版正式驗收固定使用 Rust 1.98.0；更新工具鏈仍須自行測試相容性，
+正式發行驗收使用 Rust 1.98.0；更新工具鏈仍須自行測試相容性，
 並於重新散布前核對對應的標準函式庫授權聲明。
 
 在含有 `Cargo.toml` 的專案根目錄執行：
@@ -125,8 +125,8 @@ cargo build --release --locked
 cargo test --locked
 ```
 
-首次建置需要網路取得 `Cargo.lock` 鎖定的相依套件。
-公開來源不包含 `vendor/`，也不需要本專案的內部 Python／BAT 驗收工具。
+首次建置需要網路取得 `Cargo.lock` 鎖定的相依套件。Zstandard 原生 C 程式碼由 Cargo 的 `zstd-sys` 相依套件提供並靜態編譯，不需要本儲存庫內的 `third_party/`。
+公開來源不包含 `vendor/` 或 `third_party/`，也不需要本專案的內部 Python／BAT 驗收工具。
 `.cargo/config.toml` 選定 `x86_64-pc-windows-msvc` 並啟用靜態 CRT，
 不使用 `target-cpu=native`。不要移除這個設定後仍假定執行檔沒有 VC Runtime 相依。
 
