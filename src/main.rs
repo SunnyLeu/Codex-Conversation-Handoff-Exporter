@@ -721,7 +721,10 @@ fn fallback_title(raw_messages: &[RawMessage], session_id: &str) -> String {
 fn sha256_text(text: Option<&str>) -> String {
     let mut hash = Sha256::new();
     hash.update(text.unwrap_or_default().as_bytes());
-    format!("{:x}", hash.finalize())
+    hash.finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 fn open_shared_read(path: &Path) -> Result<File> {
