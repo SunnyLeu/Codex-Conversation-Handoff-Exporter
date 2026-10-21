@@ -66,10 +66,8 @@ pub(crate) fn state_fingerprint(state: &Value) -> Result<String> {
     ] {
         relevant.insert(key.into(), state.get(key).cloned().unwrap_or(Value::Null));
     }
-    Ok(format!(
-        "{:x}",
-        Sha256::digest(serde_json::to_vec(&relevant)?)
-    ))
+    let digest = Sha256::digest(serde_json::to_vec(&relevant)?);
+    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 fn string_list(state: &Value, key: &str, required: bool) -> Result<Vec<String>> {
     let Some(v) = state.get(key) else {
