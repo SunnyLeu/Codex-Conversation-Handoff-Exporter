@@ -30,7 +30,7 @@ walkdir = "2"
 windows-sys = { version = "=0.61.2", features = ["Win32_UI_Shell", "Win32_System_Console", "Win32_System_Threading", "Win32_System_Com", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(unix)'.dependencies]
-libc = "=0.2.189"
+libc = "=0.2.191"
 
 [profile.release]
 opt-level = 3
@@ -40,8 +40,8 @@ panic = "abort"
 strip = "symbols"
 
 [build-dependencies]
-find-msvc-tools = "=0.1.12"
-winresource = "=0.1.31"
+find-msvc-tools = "=0.1.14"
+winresource = "=0.1.34"
 
 [features]
 study-wide-workers = []
