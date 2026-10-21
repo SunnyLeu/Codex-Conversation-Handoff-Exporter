@@ -25,7 +25,7 @@ regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sonic-rs = "0.5.8"
-sha2 = "0.10"
+sha2 = "0.11"
 walkdir = "2"
 windows-sys = { version = "=0.61.2", features = ["Win32_UI_Shell", "Win32_System_Console", "Win32_System_Threading", "Win32_System_Com", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging"] }
 
