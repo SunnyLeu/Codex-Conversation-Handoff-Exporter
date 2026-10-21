@@ -1,65 +1,22 @@
 //! Zstandard rollout decoding support (format only). Never mutates Codex's source files.
 //!
-//! Bundled upstream Zstandard v1.5.7 decoder is statically linked into the EXE.
+//! The `zstd` Cargo dependency delegates streaming decompression to zstd-safe,
+//! with the native Zstandard library built statically from zstd-sys sources.
 use anyhow::{Context, Result, bail};
-use std::ffi::{CStr, c_char, c_void};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use zstd::zstd_safe::{self, DCtx, InBuffer, OutBuffer};
 
 const MAX_ROLLOUT_UNCOMPRESSED: usize = 2 * 1024 * 1024 * 1024;
 const DECODE_BUFFER_SIZE: usize = 128 * 1024;
 
-#[repr(C)]
-struct ZstdInBuffer {
-    src: *const c_void,
-    size: usize,
-    pos: usize,
-}
-#[repr(C)]
-struct ZstdOutBuffer {
-    dst: *mut c_void,
-    size: usize,
-    pos: usize,
-}
-
-// Statically link the vetted vendored upstream decoder on all platforms.
-#[link(name = "zstd", kind = "static")]
-unsafe extern "C" {
-    fn ZSTD_createDStream() -> *mut c_void;
-    fn ZSTD_freeDStream(stream: *mut c_void) -> usize;
-    fn ZSTD_initDStream(stream: *mut c_void) -> usize;
-    fn ZSTD_decompressStream(
-        stream: *mut c_void,
-        output: *mut ZstdOutBuffer,
-        input: *mut ZstdInBuffer,
-    ) -> usize;
-    fn ZSTD_isError(code: usize) -> u32;
-    fn ZSTD_getErrorName(code: usize) -> *const c_char;
-}
-
-struct Decoder(*mut c_void);
-impl Drop for Decoder {
-    fn drop(&mut self) {
-        // SAFETY: the pointer was obtained from ZSTD_createDStream and is freed once.
-        unsafe { ZSTD_freeDStream(self.0) };
-    }
-}
-
-fn check_code(code: usize, path: &Path) -> Result<usize> {
-    // SAFETY: these libzstd APIs are pure queries over their scalar return code.
-    if unsafe { ZSTD_isError(code) } != 0 {
-        let detail = unsafe {
-            let p = ZSTD_getErrorName(code);
-            if p.is_null() {
-                "unknown Zstandard error".to_owned()
-            } else {
-                CStr::from_ptr(p).to_string_lossy().into_owned()
-            }
-        };
-        bail!("Zstandard decode error in {}: {detail}", path.display());
-    }
-    Ok(code)
+fn decode_error(code: usize, path: &Path) -> anyhow::Error {
+    anyhow::anyhow!(
+        "Zstandard decode error in {}: {}",
+        path.display(),
+        zstd_safe::get_error_name(code)
+    )
 }
 
 pub(crate) fn is_compressed_rollout(path: &Path) -> bool {
@@ -69,52 +26,45 @@ pub(crate) fn is_compressed_rollout(path: &Path) -> bool {
 }
 
 fn decode_zstd(compressed: &[u8], path: &Path) -> Result<Vec<u8>> {
+    decode_zstd_with_limit(compressed, path, MAX_ROLLOUT_UNCOMPRESSED)
+}
+
+fn decode_zstd_with_limit(compressed: &[u8], path: &Path, max_output: usize) -> Result<Vec<u8>> {
     if compressed.is_empty() {
         bail!("Empty Zstandard rollout: {}", path.display());
     }
-    // SAFETY: the libzstd constructor requires no parameters; a null result
-    // is handled before the pointer is used.
-    let ptr = unsafe { ZSTD_createDStream() };
-    if ptr.is_null() {
-        bail!(
+
+    let mut decoder = DCtx::try_create().ok_or_else(|| {
+        anyhow::anyhow!(
             "Unable to initialize Zstandard decoder for {}",
             path.display()
-        );
-    }
-    let decoder = Decoder(ptr);
-    check_code(unsafe { ZSTD_initDStream(decoder.0) }, path)?;
-    let mut input = ZstdInBuffer {
-        src: compressed.as_ptr().cast(),
-        size: compressed.len(),
-        pos: 0,
-    };
+        )
+    })?;
+    decoder.init().map_err(|code| decode_error(code, path))?;
+
+    let mut input = InBuffer::around(compressed);
     let mut scratch = vec![0u8; DECODE_BUFFER_SIZE];
     let mut result = Vec::new();
     loop {
-        let before_input = input.pos;
-        let mut output = ZstdOutBuffer {
-            dst: scratch.as_mut_ptr().cast(),
-            size: scratch.len(),
-            pos: 0,
-        };
-        // SAFETY: the decoder is valid and exclusively owned, and the in/out
-        // buffers point to live, non-overlapping slices for this entire call.
-        let remaining = check_code(
-            unsafe { ZSTD_decompressStream(decoder.0, &mut output, &mut input) },
-            path,
-        )?;
-        if output.pos > MAX_ROLLOUT_UNCOMPRESSED.saturating_sub(result.len()) {
+        let before_input = input.pos();
+        let mut output = OutBuffer::around(&mut scratch[..]);
+        let remaining = decoder
+            .decompress_stream(&mut output, &mut input)
+            .map_err(|code| decode_error(code, path))?;
+        let written = output.pos();
+        // Enforce the same 2 GiB maximum as the original decoder before append.
+        if written > max_output.saturating_sub(result.len()) {
             bail!(
                 "Zstandard rollout exceeds safety limit of {} bytes: {}",
-                MAX_ROLLOUT_UNCOMPRESSED,
+                max_output,
                 path.display()
             );
         }
-        result.extend_from_slice(&scratch[..output.pos]);
-        if remaining == 0 && input.pos == input.size {
+        result.extend_from_slice(&scratch[..written]);
+        if remaining == 0 && input.pos() == compressed.len() {
             return Ok(result);
         }
-        if input.pos == before_input && output.pos == 0 {
+        if input.pos() == before_input && written == 0 {
             bail!("Truncated or stalled Zstandard rollout: {}", path.display());
         }
     }
@@ -155,5 +105,30 @@ mod tests {
         assert!(decode_zstd(&sample[..sample.len() - 2], name).is_err());
         assert!(decode_zstd(b"invalid", name).is_err());
         assert!(decode_zstd(b"", name).is_err());
+    }
+
+    #[test]
+    fn zstd_concatenated_frames_are_fully_decoded() {
+        let sample = include_bytes!("../fixtures/sample-rollout.jsonl.zst");
+        let combined = [sample.as_slice(), sample.as_slice()].concat();
+        let name = Path::new("rollout-double.jsonl.zst");
+        let expected = b"{\"type\":\"session_meta\",\"payload\":{\"id\":\"test\"}}\n";
+        assert_eq!(decode_zstd(&combined, name).unwrap(), expected.repeat(2));
+
+        // A truncated second frame must not be hidden by a valid first frame.
+        assert!(decode_zstd(&combined[..combined.len() - 2], name).is_err());
+        assert!(decode_zstd(&[sample.as_slice(), b"garbage"].concat(), name).is_err());
+    }
+
+    #[test]
+    fn zstd_limit_is_enforced_before_returning_output() {
+        let sample = include_bytes!("../fixtures/sample-rollout.jsonl.zst");
+        let name = Path::new("rollout-limit.jsonl.zst");
+        let expected = b"{\"type\":\"session_meta\",\"payload\":{\"id\":\"test\"}}\n";
+        assert_eq!(
+            decode_zstd_with_limit(sample, name, expected.len()).unwrap(),
+            expected
+        );
+        assert!(decode_zstd_with_limit(sample, name, expected.len() - 1).is_err());
     }
 }
