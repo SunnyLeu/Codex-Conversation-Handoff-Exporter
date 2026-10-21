@@ -1,0 +1,42 @@
+version: 2
+updates:
+  # GitHub Actions：追蹤 workflow 內使用的 actions 版本。
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "11:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # Cargo：包含直接與間接依賴；移除內建 zstd C 原始碼、改用 Cargo 套件後，
+  # zstd-safe / zstd-sys 才會進入此監控範圍。
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "12:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    allow:
+      - dependency-type: all
+    commit-message:
+      prefix: build
+    groups:
+      cargo-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
