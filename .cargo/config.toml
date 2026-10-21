@@ -1,0 +1,8 @@
+# The distributed application supports Windows x64 only.
+[build]
+target = "x86_64-pc-windows-msvc"
+
+# Keep the C/C++ runtime inside the EXE. System Windows DLLs remain dynamic.
+# No local vendor replacement or build-machine-specific CPU optimizations.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

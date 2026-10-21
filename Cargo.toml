@@ -1,0 +1,50 @@
+[package]
+name = "codex-conversation-handoff-exporter"
+version = "2.0.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+build = "build.rs"
+description = "Portable Windows x64 Codex conversation-to-Handoff exporter"
+license = "MIT"
+repository = "https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter"
+readme = "README.md"
+
+[[bin]]
+name = "Codex-Conversation-Handoff-Exporter"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+rayon = "1"
+indexmap = { version = "2", features = ["serde"] }
+memchr = "2"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sonic-rs = "0.5.8"
+sha2 = "0.10"
+walkdir = "2"
+windows-sys = { version = "=0.61.2", features = ["Win32_UI_Shell", "Win32_System_Console", "Win32_System_Threading", "Win32_System_Com", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.189"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[build-dependencies]
+find-msvc-tools = "=0.1.12"
+winresource = "=0.1.31"
+
+[features]
+study-wide-workers = []
+integrated-study = []
+study-windows-api-typecheck = ["integrated-study"]
+v2-windows-api-typecheck = []
