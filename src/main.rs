@@ -17015,7 +17015,7 @@ fn ensure_existing_handoffs_belong_to_scope(
     output: &Path,
     scope: &project_membership::ProjectScope,
 ) -> Result<()> {
-    destination::validate_existing(output, &scope.selected_ids)
+    destination::validate_existing(output, &scope.selected_ids, scope.root_ids.len() == 1)
 }
 
 fn build_all_candidates(
@@ -17340,7 +17340,7 @@ fn build_all_candidates(
             );
             allowed.extend(session.internal_session_ids.iter().cloned());
         }
-        destination::validate_existing(&args.output_directory, &allowed)?;
+        destination::validate_existing(&args.output_directory, &allowed, sessions.len() == 1)?;
     }
     progress::stage("建立 Handoff", total_handoffs);
     let candidate_build_start = Instant::now();
@@ -17440,6 +17440,15 @@ fn build_all_candidates(
     if let Some(error) = build_error {
         cleanup_prepared_temp_files(&pipeline_prepared);
         return Err(error);
+    }
+    if write_outputs {
+        // A shared directory is permitted for a single handoff, but no
+        // candidate may collide with a different conversation's final file.
+        // Check before stale cleanup in both modern and legacy output paths.
+        if let Err(error) = destination::validate_planned(&args.output_directory, &candidates) {
+            cleanup_prepared_temp_files(&pipeline_prepared);
+            return Err(error);
+        }
     }
     let pre_serialized = args
         .pre_serialize_candidates
@@ -21495,7 +21504,7 @@ text(r);"#;
     }
 
     #[test]
-    fn explicit_project_rejects_foreign_and_unreadable_handoffs() {
+    fn single_project_allows_foreign_but_rejects_unreadable_handoffs() {
         let path =
             std::env::temp_dir().join(format!("universal-output-guard-{}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
@@ -21514,7 +21523,9 @@ text(r);"#;
         };
         let file = path.join("Test.handoff.json");
         fs::write(&file, r#"{"conversation_id":"foreign-root"}"#).unwrap();
-        assert!(ensure_existing_handoffs_belong_to_scope(&path, &scope).is_err());
+        assert!(ensure_existing_handoffs_belong_to_scope(&path, &scope).is_ok());
+        // Multiple output roots preserve the strict previous policy.
+        assert!(destination::validate_existing(&path, &scope.selected_ids, false,).is_err());
         fs::write(&file, r#"{"conversation_id":"selected-root"}"#).unwrap();
         assert!(ensure_existing_handoffs_belong_to_scope(&path, &scope).is_ok());
         fs::write(&file, "not-json-or-handoff").unwrap();

@@ -336,7 +336,11 @@ fn confirmation(
                             if scope.root_ids.is_empty() {
                                 bail!("此專案目前沒有可匯出的主對話");
                             }
-                            crate::destination::validate_existing(&p, &scope.selected_ids)?;
+                            crate::destination::validate_existing(
+                                &p,
+                                &scope.selected_ids,
+                                scope.root_ids.len() == 1,
+                            )?;
                         }
                     }
                     Ok(p)

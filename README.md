@@ -5,12 +5,18 @@
 
 這是非官方社群專案，並非 OpenAI 的產品，也未獲 OpenAI 背書。
 
+## 2.0.2 修正說明
+
+- 多段 `history_base` 續接改依實體 Rollout ID 對應父檔，並在該父檔驗證相對位元組 Offset 與邏輯 Ordinal，不會錯把 Offset 套用到整條已合併歷史。
+- 單次實際僅輸出一份 Handoff 時，允許目的地存在其他對話的 Handoff；既有輸出清理仍限本次目標。遇到同名異對話、損壞檔案、無法辨識的目標或不安全連結仍拒絕覆寫／清理。多份輸出情境維持原有保護。
+- 本次兩項修正已先由 2.0.1 修正候選版通過 Windows 171 項 Rust 測試及七組合成 EXE 端到端測試；實際出錯的主對話也已由使用者回報成功匯出。**正式 2.0.2 版本仍須以 2.0.2 自身的 CI、建置與發行驗收結果為準。**
+
 ## 下載與執行
 
 在本儲存庫的 [Releases](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/releases)
 下載 Windows x64 套件：
 
-`Codex-Conversation-Handoff-Exporter-2.0.1-windows-x64.zip`
+`Codex-Conversation-Handoff-Exporter-2.0.2-windows-x64.zip`
 
 解壓後執行 `Codex-Conversation-Handoff-Exporter.exe`。
 EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔，可以移至自己偏好的位置。
@@ -107,8 +113,9 @@ Handoff 不是 Codex 原始資料夾備份，也不是可匯入 Codex 的官方�
 
 每次匯出會完整重寫本次目標的 Handoff，並整理屬於同一目標的過期輸出。
 選擇的資料夾就是實際輸出位置，不會自動新增專案子資料夾。
-若既有 `.handoff.json` 屬於其他目標、已損壞或無法確認身分，程式會在覆寫／清理前拒絕。
-請改選乾淨或可明確確認屬同一目標的資料夾；沒有「強制覆寫所有檔案」選項。
+若本次實際只會產生**一份 Handoff**（單一主對話的專案或獨立對話），允許資料夾內已有其他對話的有效 Handoff；它們不會因此被覆寫或清理。
+若本次會產生多份 Handoff，仍要求資料夾內既有 Handoff 都屬於本次目標。
+任何模式下，預定輸出的檔名若已被不同對話占用，或既有 Handoff 損壞、身分不明、檔案是不安全的連結／重新解析點，仍會在寫入前拒絕；沒有「強制覆寫所有檔案」選項。
 不修改 Codex 原始來源資料。
 
 ## 從原始碼建置

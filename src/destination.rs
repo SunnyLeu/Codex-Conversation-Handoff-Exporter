@@ -82,7 +82,14 @@ pub(crate) fn validate_path(output: &Path, args: &crate::Args) -> Result<()> {
     }
     Ok(())
 }
-pub(crate) fn validate_existing(output: &Path, allowed: &HashSet<String>) -> Result<()> {
+/// A single root handoff may share its folder with unrelated Handoffs.
+/// Existing files still have to be well-formed and safe to inspect, and a
+/// planned filename collision is checked separately before any deletion.
+pub(crate) fn validate_existing(
+    output: &Path,
+    allowed: &HashSet<String>,
+    allow_foreign: bool,
+) -> Result<()> {
     if !output.exists() {
         return Ok(());
     }
@@ -113,12 +120,66 @@ pub(crate) fn validate_existing(output: &Path, allowed: &HashSet<String>) -> Res
             .and_then(serde_json::Value::as_str)
             .filter(|s| !s.trim().is_empty())
             .ok_or_else(|| anyhow::anyhow!("既有 Handoff 無法確認身分：{}", p.display()))?;
-        if !allowed.contains(id) {
+        if !allowed.contains(id) && !allow_foreign {
             bail!("資料夾含其他匯出目標的 Handoff（{id}）；拒絕覆寫或清理。請選擇其他資料夾。");
         }
     }
     Ok(())
 }
+/// All prospective final filenames are checked before any existing Handoff is
+/// removed. This also covers the legacy sequential exporter, whose final rename
+/// previously relied solely on the whole-directory ownership preflight.
+pub(crate) fn validate_planned(
+    output: &Path,
+    candidates: &[(String, serde_json::Value)],
+) -> Result<()> {
+    let mut names = HashSet::new();
+    for (filename, handoff) in candidates {
+        // A generated filename must never escape the chosen output folder.
+        if !Path::new(filename).is_relative() || Path::new(filename).components().count() != 1 {
+            bail!("無效的預定 Handoff 檔名：{filename}");
+        }
+        if !names.insert(filename.to_ascii_lowercase()) {
+            bail!("同一次匯出包含重複的目的檔名：{filename}");
+        }
+        let planned = output.join(filename);
+        let expected_id = handoff
+            .get("conversation_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("準備匯出的 Handoff 缺少對話身分：{filename}"))?;
+        let meta = match fs::symlink_metadata(&planned) {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("無法檢查目的檔案：{}", planned.display()));
+            }
+        };
+        if reparse(&meta) || !meta.is_file() {
+            bail!("目的檔名已被不安全的項目占用：{}", planned.display());
+        }
+        let data = fs::read(&planned)
+            .with_context(|| format!("無法讀取目的檔案：{}", planned.display()))?;
+        let original: serde_json::Value = serde_json::from_slice(&data)
+            .with_context(|| format!("目的檔案損壞，不允許覆寫：{}", planned.display()))?;
+        let current_id = original
+            .get("conversation_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!("目的檔案身分不明，不允許覆寫：{}", planned.display())
+            })?;
+        if current_id != expected_id {
+            bail!(
+                "目的檔名已屬於另一條對話（{current_id}），拒絕覆寫：{}",
+                planned.display()
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,7 +193,7 @@ mod tests {
             r#"{}"#,
         ] {
             fs::write(&p, data).unwrap();
-            assert!(validate_existing(d.path(), &HashSet::from(["same".into()])).is_err());
+            assert!(validate_existing(d.path(), &HashSet::from(["same".into()]), false).is_err());
             assert_eq!(fs::read_to_string(&p).unwrap(), data);
         }
     }
@@ -144,8 +205,58 @@ mod tests {
             r#"{"conversation_id":"same"}"#,
         )
         .unwrap();
-        assert!(validate_existing(d.path(), &HashSet::from(["same".into()])).is_ok());
+        assert!(validate_existing(d.path(), &HashSet::from(["same".into()]), false).is_ok());
     }
+    #[test]
+    fn single_handoff_can_share_folder_but_not_overwrite_foreign() {
+        let d = crate::codex_paths::TempDir::new("dest-share-test").unwrap();
+        let foreign = d.path().join("02. existing.handoff.json");
+        let own = d.path().join("01. own.handoff.json");
+        let bytes = br#"{"conversation_id":"foreign-thread"}"#;
+        fs::write(&foreign, bytes).unwrap();
+        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), true).is_ok());
+        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), false).is_err());
+        let planned = vec![(
+            "01. own.handoff.json".to_string(),
+            serde_json::json!({"conversation_id":"own-thread"}),
+        )];
+        assert!(validate_planned(d.path(), &planned).is_ok());
+        fs::write(&own, r#"{"conversation_id":"foreign-thread"}"#).unwrap();
+        assert!(validate_planned(d.path(), &planned).is_err());
+        assert_eq!(fs::read(&foreign).unwrap(), bytes.to_vec());
+        assert_eq!(
+            fs::read_to_string(&own).unwrap(),
+            r#"{"conversation_id":"foreign-thread"}"#
+        );
+        fs::write(&own, r#"{"conversation_id":"own-thread"}"#).unwrap();
+        assert!(validate_planned(d.path(), &planned).is_ok());
+        fs::write(&own, b"{broken").unwrap();
+        assert!(validate_planned(d.path(), &planned).is_err());
+        let escaping = vec![(
+            "../escaping.handoff.json".into(),
+            serde_json::json!({"conversation_id":"own-thread"}),
+        )];
+        assert!(validate_planned(d.path(), &escaping).is_err());
+        let duplicates = vec![
+            planned[0].clone(),
+            (
+                "01. OWN.HANDOFF.JSON".into(),
+                serde_json::json!({"conversation_id":"own-thread"}),
+            ),
+        ];
+        assert!(validate_planned(d.path(), &duplicates).is_err());
+    }
+
+    #[test]
+    fn single_handoff_still_rejects_damaged_or_unknown_other_handoffs() {
+        let d = crate::codex_paths::TempDir::new("dest-damaged-test").unwrap();
+        let foreign = d.path().join("foreign.handoff.json");
+        fs::write(&foreign, b"invalid").unwrap();
+        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), true).is_err());
+        fs::write(&foreign, br#"{}"#).unwrap();
+        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), true).is_err());
+    }
+
     #[test]
     fn source_directory_cannot_be_destination() {
         use clap::Parser;
@@ -163,6 +274,6 @@ mod tests {
         let original = d.path().join("data");
         fs::write(&original, r#"{"conversation_id":"same"}"#).unwrap();
         std::os::unix::fs::symlink(&original, d.path().join("x.handoff.json")).unwrap();
-        assert!(validate_existing(d.path(), &HashSet::from(["same".into()])).is_err());
+        assert!(validate_existing(d.path(), &HashSet::from(["same".into()]), false).is_err());
     }
 }

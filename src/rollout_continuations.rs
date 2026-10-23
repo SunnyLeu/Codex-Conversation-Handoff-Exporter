@@ -1,10 +1,11 @@
 //! Reconstruct Codex paginated history from immutable physical rollout snapshots.
 //!
 //! A resumed Codex thread can have multiple rollout files with the same
-//! `session_meta.id`. A continuation's `history_base` names the exact prior
-//! *logical* JSONL prefix (record ordinal and decoded byte offset); the
-//! records after that prefix in the old file are not part of the resumed
-//! logical history. This module never changes original Codex data.
+//! `session_meta.id`. `history_base.thread_id` identifies the *physical* prior
+//! rollout, not necessarily the canonical session ID. Its byte offset is local
+//! to that prior file, while the ordinal belongs to the logical history.
+//! Only verified retained prefixes are included. Original Codex data is never
+//! modified.
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -23,9 +24,51 @@ struct PhysicalRollout {
     bytes: Vec<u8>,
     meta: Value,
     id: String,
+    physical_id: String,
     timestamp: String,
     history_base: Option<(String, usize, usize)>,
     meta_end: usize,
+}
+
+// Codex uses `rollout-<timestamp>-<logical_id>[_<physical_id>].jsonl[.zst]`.
+// Only the final UUID names the physical file for an actual Codex rollout.
+// Plain short basenames are kept for isolated synthetic/legacy fixtures.
+fn physical_rollout_id(path: &Path, logical_id: &str) -> Result<String> {
+    let filename = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow!("Non-UTF-8 rollout filename: {}", path.display()))?;
+    let stem = filename
+        .strip_suffix(".jsonl.zst")
+        .or_else(|| filename.strip_suffix(".jsonl"))
+        .ok_or_else(|| anyhow!("Unexpected rollout filename: {}", path.display()))?;
+    if stem.starts_with("rollout-") {
+        let (prefix, physical) = stem
+            .rsplit_once('_')
+            .map_or((stem, logical_id), |(prefix, suffix)| (prefix, suffix));
+        let is_uuid = |id: &str| {
+            id.len() == 36
+                && id.bytes().enumerate().all(|(i, b)| {
+                    if [8, 13, 18, 23].contains(&i) {
+                        b == b'-'
+                    } else {
+                        b.is_ascii_hexdigit()
+                    }
+                })
+        };
+        ensure!(
+            is_uuid(logical_id) && is_uuid(physical) && prefix.ends_with(&format!("-{logical_id}")),
+            "Rollout filename/metadata identity mismatch: {}",
+            path.display()
+        );
+        return Ok(physical.to_owned());
+    }
+    ensure!(
+        !stem.is_empty() && !stem.contains('_'),
+        "Cannot identify physical rollout from {}",
+        path.display()
+    );
+    Ok(stem.to_owned())
 }
 
 fn load(path: &Path) -> Result<PhysicalRollout> {
@@ -79,11 +122,6 @@ fn load(path: &Path) -> Result<PhysicalRollout> {
                 .and_then(|n| usize::try_from(n).ok())
                 .ok_or_else(|| anyhow!("history_base byte offset invalid: {}", path.display()))?;
             ensure!(
-                thread_id == id,
-                "history_base references a different thread in {}",
-                path.display()
-            );
-            ensure!(
                 meta.get("history_mode").and_then(Value::as_str) == Some("paginated"),
                 "history_base without paginated history_mode in {}",
                 path.display()
@@ -94,11 +132,13 @@ fn load(path: &Path) -> Result<PhysicalRollout> {
     // The superseded tail of a physical file is *not* logical history.
     // Parse the retained merged stream below instead of rejecting unrelated
     // abandoned bytes here. Zstandard framing was still fully verified.
+    let physical_id = physical_rollout_id(path, &id)?;
     Ok(PhysicalRollout {
         path: path.to_path_buf(),
         bytes,
         meta: meta.clone(),
         id,
+        physical_id,
         timestamp,
         history_base,
         meta_end,
@@ -143,21 +183,105 @@ fn validate_identity(base: &PhysicalRollout, next: &PhysicalRollout) -> Result<(
     Ok(())
 }
 
-fn build_chain(files: &[PathBuf]) -> Result<Vec<u8>> {
-    let mut physical: Vec<_> = files.iter().map(|p| load(p)).collect::<Result<_>>()?;
-    let id = physical[0].id.clone();
+// A `history_base` cutoff is a byte offset into its named physical parent,
+// never the concatenation assembled so far. Check both the physical JSONL
+// boundary and the logical ordinal before allowing any bytes to be emitted.
+fn validate_parent_cut(
+    parent: &PhysicalRollout,
+    resumed: &PhysicalRollout,
+    ordinal: usize,
+    offset: usize,
+) -> Result<()> {
     ensure!(
-        physical.iter().all(|p| p.id == id),
+        ordinal > 0 && offset >= parent.meta_end && offset <= parent.bytes.len(),
+        "Invalid history_base extent in {} for Session {}",
+        resumed.path.display(),
+        parent.id
+    );
+    ensure!(
+        parent.bytes[offset - 1] == b'\n',
+        "history_base byte offset splits a JSONL record in {}",
+        resumed.path.display()
+    );
+    let start = parent.bytes[..offset - 1]
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |index| index + 1);
+    let last: Value = serde_json::from_slice(&parent.bytes[start..offset]).with_context(|| {
+        format!(
+            "Invalid JSONL record at history_base cutoff in {}",
+            parent.path.display()
+        )
+    })?;
+    if let Some(last_ordinal) = last.get("ordinal").and_then(Value::as_u64) {
+        ensure!(
+            last_ordinal.checked_add(1) == u64::try_from(ordinal).ok(),
+            "history_base ordinal/byte mismatch in {}: claimed {}, previous ordinal {}",
+            resumed.path.display(),
+            ordinal,
+            last_ordinal
+        );
+    } else {
+        // Historical synthetic fixtures without per-record ordinal still use
+        // the same physical offset model. Their starting ordinal is inherited
+        // from the prior page (or zero for the full-history root).
+        let physical_start = parent
+            .history_base
+            .as_ref()
+            .map_or(0, |(_, start, _)| *start);
+        let count = parent.bytes[..offset]
+            .iter()
+            .filter(|byte| **byte == b'\n')
+            .count();
+        ensure!(
+            physical_start.checked_add(count) == Some(ordinal),
+            "history_base ordinal/byte mismatch in {}: claimed {}, physical prefix starts at {} and contains {} records",
+            resumed.path.display(),
+            ordinal,
+            physical_start,
+            count
+        );
+    }
+    let resumed_meta: Value = serde_json::from_slice(&resumed.bytes[..resumed.meta_end])?;
+    if let Some(first_ordinal) = resumed_meta.get("ordinal").and_then(Value::as_u64) {
+        ensure!(
+            u64::try_from(ordinal).ok() == Some(first_ordinal),
+            "Resumed session_meta ordinal does not match history_base in {}",
+            resumed.path.display()
+        );
+    }
+    // The resumed metadata occupies one logical ordinal even though the
+    // merged history retains the original canonical session_meta instead.
+    let rest = &resumed.bytes[resumed.meta_end..];
+    if let Some(end) = rest.iter().position(|byte| *byte == b'\n') {
+        let first_event: Value = serde_json::from_slice(&rest[..=end]).with_context(|| {
+            format!("Invalid first resumed event in {}", resumed.path.display())
+        })?;
+        if let Some(first_event_ordinal) = first_event.get("ordinal").and_then(Value::as_u64) {
+            ensure!(
+                u64::try_from(ordinal).ok().and_then(|n| n.checked_add(1))
+                    == Some(first_event_ordinal),
+                "Resumed event ordinal is discontinuous in {}",
+                resumed.path.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn build_chain(files: &[PathBuf]) -> Result<Vec<u8>> {
+    ensure!(!files.is_empty(), "Empty continuation group");
+    let physical: Vec<_> = files.iter().map(|p| load(p)).collect::<Result<_>>()?;
+    let id = &physical[0].id;
+    ensure!(
+        physical.iter().all(|part| part.id == *id),
         "Mixed IDs in continuation group"
     );
-    physical.sort_by(|a, b| {
-        a.timestamp
-            .cmp(&b.timestamp)
-            .then_with(|| a.path.cmp(&b.path))
-    });
     let roots: Vec<_> = physical
         .iter()
-        .filter(|p| p.history_base.is_none())
+        .enumerate()
+        .filter(|(_, part)| part.history_base.is_none())
+        .map(|(index, _)| index)
         .collect();
     ensure!(
         roots.len() == 1,
@@ -165,71 +289,117 @@ fn build_chain(files: &[PathBuf]) -> Result<Vec<u8>> {
         id,
         roots.len()
     );
-    let root = roots[0];
+    let root_index = roots[0];
     ensure!(
-        physical.first().is_some_and(|p| p.path == root.path),
-        "Session {} continuation predates its only full-history root",
-        id
-    );
-    ensure!(
-        root.meta.get("history_mode").and_then(Value::as_str) == Some("paginated"),
+        physical[root_index]
+            .meta
+            .get("history_mode")
+            .and_then(Value::as_str)
+            == Some("paginated"),
         "Repeated Session {} is not marked as paginated",
         id
     );
-    let mut assembled = root.bytes.clone();
-    let mut seen_pointers = HashSet::new();
-    let mut previous_timestamp = &root.timestamp;
-    for next in physical.iter().skip(1) {
-        validate_identity(root, next)?;
+    // Physical identities are unique even if timestamps, paths or logical
+    // session IDs happen to repeat. No ordering by timestamp or filename can
+    // safely substitute for the explicit lineage pointers.
+    let mut by_physical_id = HashMap::<&str, usize>::new();
+    for (index, part) in physical.iter().enumerate() {
         ensure!(
-            next.timestamp > *previous_timestamp,
+            by_physical_id.insert(&part.physical_id, index).is_none(),
+            "Duplicate physical rollout ID {} for Session {}",
+            part.physical_id,
+            id
+        );
+    }
+    let mut child_of = HashMap::<usize, usize>::new();
+    for (index, part) in physical.iter().enumerate() {
+        let Some((parent_id, _, _)) = part.history_base.as_ref() else {
+            continue;
+        };
+        let parent_index = *by_physical_id.get(parent_id.as_str()).ok_or_else(|| {
+            anyhow!(
+                "history_base physical parent {} missing for Session {} in {}",
+                parent_id,
+                id,
+                part.path.display()
+            )
+        })?;
+        ensure!(
+            parent_index != index,
+            "Self-referencing history_base for Session {}",
+            id
+        );
+        let parent = &physical[parent_index];
+        validate_identity(parent, part)?;
+        ensure!(
+            part.timestamp > parent.timestamp,
             "Non-increasing continuation timestamps for Session {}",
             id
         );
-        let (_, ordinal, offset) = next
-            .history_base
-            .as_ref()
-            .ok_or_else(|| anyhow!("Unlinked duplicate Session {}: {}", id, next.path.display()))?;
         ensure!(
-            *ordinal > 0 && *offset > 0 && *offset <= assembled.len(),
-            "Invalid history_base extent in {} for Session {}",
-            next.path.display(),
-            id
+            child_of.insert(parent_index, index).is_none(),
+            "Ambiguous history_base fork for Session {} (physical parent {})",
+            id,
+            parent_id
         );
-        ensure!(
-            assembled[*offset - 1] == b'\n',
-            "history_base byte offset splits a JSONL record in {}",
-            next.path.display()
-        );
-        let actual_ordinal = assembled[..*offset].iter().filter(|b| **b == b'\n').count();
-        ensure!(
-            actual_ordinal == *ordinal,
-            "history_base ordinal/byte mismatch in {}: claimed {} records, found {}",
-            next.path.display(),
-            ordinal,
-            actual_ordinal
-        );
-        ensure!(
-            seen_pointers.insert((*ordinal, *offset)),
-            "Ambiguous repeated history_base (possible fork) for Session {}",
-            id
-        );
-        // Every suffix owns its *own* session_meta. Keep the root's canonical
-        // metadata and only append resumed events after the verified prefix.
-        assembled.truncate(*offset);
-        assembled.extend_from_slice(&next.bytes[next.meta_end..]);
-        previous_timestamp = &next.timestamp;
     }
-    // Preserve the original reader's policy for an incomplete final JSONL
-    // line, while never accepting malformed data in the middle of history.
+    let mut sequence = Vec::with_capacity(physical.len());
+    let mut visited = HashSet::new();
+    let mut current = Some(root_index);
+    while let Some(index) = current {
+        ensure!(
+            visited.insert(index),
+            "Cyclic history_base chain for Session {}",
+            id
+        );
+        sequence.push(index);
+        current = child_of.get(&index).copied();
+    }
+    ensure!(
+        sequence.len() == physical.len(),
+        "Unreachable or cyclic continuation parts for Session {}: linked {} of {} physical files",
+        id,
+        sequence.len(),
+        physical.len()
+    );
+    let mut assembled = Vec::new();
+    for (position, index) in sequence.iter().copied().enumerate() {
+        let part = &physical[index];
+        let end = if let Some(&next_index) = sequence.get(position + 1) {
+            let next = &physical[next_index];
+            let (parent_id, ordinal, offset) = next
+                .history_base
+                .as_ref()
+                .expect("every continuation has a history_base");
+            ensure!(
+                parent_id == &part.physical_id,
+                "Continuation lineage changed while merging Session {}",
+                id
+            );
+            validate_parent_cut(part, next, *ordinal, *offset)?;
+            *offset
+        } else {
+            part.bytes.len()
+        };
+        let start = if position == 0 { 0 } else { part.meta_end };
+        ensure!(
+            end >= start,
+            "history_base would truncate the retained session_meta in {}",
+            part.path.display()
+        );
+        assembled.extend_from_slice(&part.bytes[start..end]);
+    }
+    // Preserve the original reader's policy for a final incomplete JSONL
+    // line; complete-but-invalid JSONL records are never accepted.
     let segments: Vec<&[u8]> = assembled.split_inclusive(|b| *b == b'\n').collect();
+    let mut previous_ordinal = None;
     for (index, segment) in segments.iter().enumerate() {
         if segment.iter().all(u8::is_ascii_whitespace) {
             continue;
         }
         let record: Value = match serde_json::from_slice(segment) {
             Ok(record) => record,
-            Err(_) if index + 1 == segments.len() => break,
+            Err(_) if index + 1 == segments.len() && !segment.ends_with(b"\n") => break,
             Err(error) => bail!(
                 "Invalid retained continuation JSONL at record {} for Session {}: {}",
                 index + 1,
@@ -242,6 +412,15 @@ fn build_chain(files: &[PathBuf]) -> Result<Vec<u8>> {
                 "Unexpected second session_meta in retained continuation for Session {}",
                 id
             );
+        }
+        if let Some(ordinal) = record.get("ordinal").and_then(Value::as_u64) {
+            ensure!(
+                previous_ordinal.is_none_or(|prior| ordinal > prior),
+                "Repeated or decreasing retained continuation ordinal for Session {} at record {}",
+                id,
+                index + 1
+            );
+            previous_ordinal = Some(ordinal);
         }
     }
     Ok(assembled)
@@ -389,11 +568,10 @@ mod tests {
     fn record(s: &str) -> Vec<u8> {
         format!("{s}\n").into_bytes()
     }
-    fn meta(id: &str, stamp: &str, link: Option<(u64, u64)>) -> Vec<u8> {
+    fn meta(id: &str, stamp: &str, link: Option<(&str, u64, u64)>) -> Vec<u8> {
         let mut body = json!({"id":id,"session_id":id,"timestamp":stamp,"cwd":"D:\\SYNTHETIC_CONTINUATION", "source":"vscode", "originator":"Codex Desktop", "thread_source":"user","history_mode":"paginated"});
-        if let Some((ordinal, offset)) = link {
-            body["history_base"] =
-                json!({"thread_id":id,"end_ordinal_exclusive":ordinal,"end_byte_offset":offset});
+        if let Some((physical_parent, ordinal, offset)) = link {
+            body["history_base"] = json!({"thread_id":physical_parent,"end_ordinal_exclusive":ordinal,"end_byte_offset":offset});
         }
         format!("{}\n", json!({"type":"session_meta", "payload":body})).into_bytes()
     }
@@ -424,7 +602,7 @@ mod tests {
         base.extend(record(
             r#"{"type":"event_msg","payload":{"type":"turn_aborted"}}"#,
         ));
-        let mut suffix = meta(id, "2026-10-19T11:08:31Z", Some((2, cut as u64)));
+        let mut suffix = meta(id, "2026-10-19T11:08:31Z", Some(("a", 2, cut as u64)));
         suffix.extend(record(
             r#"{"type":"response_item","payload":{"type":"message","content":"resume"}}"#,
         ));
@@ -446,7 +624,11 @@ mod tests {
         let id = "thread";
         let base = meta(id, "2026-10-19T09:04:07Z", None);
         let a = write(&dir, "a.jsonl", &base);
-        let mut tail = meta(id, "2026-10-19T11:08:31Z", Some((99, base.len() as u64)));
+        let mut tail = meta(
+            id,
+            "2026-10-19T11:08:31Z",
+            Some(("a", 99, base.len() as u64)),
+        );
         tail.extend(record(r#"{"type":"event_msg","payload":{}}"#));
         let b = write(&dir, "b.jsonl", &tail);
         assert!(build_chain(&[a.clone(), b.clone()]).is_err());
@@ -466,16 +648,20 @@ mod tests {
         root.extend(record(
             r#"{"type":"event_msg","payload":{"type":"turn_aborted","message":"superseded-one"}}"#,
         ));
-        let mut second = meta(id, "2026-10-19T10:00:00Z", Some((2, root_cut as u64)));
+        let mut second = meta(id, "2026-10-19T10:00:00Z", Some(("a", 2, root_cut as u64)));
         second.extend(record(
             r#"{"type":"event_msg","payload":{"type":"user_message","message":"second"}}"#,
         ));
-        let second_cut = root[..root_cut].len() + second.len()
-            - meta(id, "2026-10-19T10:00:00Z", Some((2, root_cut as u64))).len();
+        // A physical cut into b.jsonl, not an offset into root + b.
+        let second_cut = second.len();
         second.extend(record(
             r#"{"type":"event_msg","payload":{"type":"turn_aborted","message":"superseded-two"}}"#,
         ));
-        let mut third = meta(id, "2026-10-19T11:00:00Z", Some((3, second_cut as u64)));
+        let mut third = meta(
+            id,
+            "2026-10-19T11:00:00Z",
+            Some(("b", 4, second_cut as u64)),
+        );
         third.extend(record(
             r#"{"type":"event_msg","payload":{"type":"user_message","message":"third"}}"#,
         ));
@@ -497,7 +683,7 @@ mod tests {
         let dir = test_folder();
         let id = "00000000-0000-7000-8000-000000000800";
         let root = meta(id, "2026-10-19T09:00:00Z", None);
-        let pointer = Some((1, root.len() as u64));
+        let pointer = Some(("a", 1, root.len() as u64));
         let a = write(&dir, "a.jsonl", &root);
         let b = write(&dir, "b.jsonl", &meta(id, "2026-10-19T10:00:00Z", pointer));
         let c = write(&dir, "c.jsonl", &meta(id, "2026-10-19T11:00:00Z", pointer));
@@ -507,6 +693,191 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
     #[test]
+    fn physical_rollout_uuid_chain_reconstructs_three_pages() {
+        let dir = test_folder();
+        let id = "01a16681-f457-7013-9e48-b9982ef68e33";
+        let middle_id = "01a16699-882b-7203-92f9-b859785f19d7";
+        let newest_id = "01a16699-c1af-7c62-9026-18aa2216d3a6";
+        let mut first = meta(id, "2026-10-23T10:05:55Z", None);
+        first.extend(record(
+            r#"{"ordinal":1,"type":"event_msg","payload":{"message":"root-event"}}"#,
+        ));
+        // Synthetic file headers include a canonical session_meta but the
+        // ordinal is attached to this record for boundary verification.
+        let mut first_meta: Value =
+            serde_json::from_slice(&first[..first.iter().position(|b| *b == b'\n').unwrap()])
+                .unwrap();
+        first_meta["ordinal"] = json!(0);
+        let first_line = record(&first_meta.to_string());
+        let header_end = first.iter().position(|b| *b == b'\n').unwrap() + 1;
+        first.splice(..header_end, first_line);
+        let root_cut = first.len();
+        first.extend(record(
+            r#"{"ordinal":2,"type":"event_msg","payload":{"message":"aborted-root"}}"#,
+        ));
+
+        let mut mid = meta(id, "2026-10-23T10:31:40Z", Some((id, 2, root_cut as u64)));
+        mid.extend(record(
+            r#"{"ordinal":3,"type":"event_msg","payload":{"message":"middle-event"}}"#,
+        ));
+        let mut mid_meta: Value =
+            serde_json::from_slice(&mid[..mid.iter().position(|b| *b == b'\n').unwrap()]).unwrap();
+        mid_meta["ordinal"] = json!(2);
+        let mid_line = record(&mid_meta.to_string());
+        let header_end = mid.iter().position(|b| *b == b'\n').unwrap() + 1;
+        mid.splice(..header_end, mid_line);
+        let mid_cut = mid.len();
+        mid.extend(record(
+            r#"{"ordinal":4,"type":"event_msg","payload":{"message":"aborted-mid"}}"#,
+        ));
+
+        let mut last = meta(
+            id,
+            "2026-10-23T10:31:55Z",
+            Some((middle_id, 4, mid_cut as u64)),
+        );
+        last.extend(record(
+            r#"{"ordinal":5,"type":"event_msg","payload":{"message":"newest-event"}}"#,
+        ));
+        let mut last_meta: Value =
+            serde_json::from_slice(&last[..last.iter().position(|b| *b == b'\n').unwrap()])
+                .unwrap();
+        last_meta["ordinal"] = json!(4);
+        let last_line = record(&last_meta.to_string());
+        let header_end = last.iter().position(|b| *b == b'\n').unwrap() + 1;
+        last.splice(..header_end, last_line);
+
+        let a = write(
+            &dir,
+            &format!("rollout-2026-10-23T10-05-55-{id}.jsonl"),
+            &first,
+        );
+        let b = write(
+            &dir,
+            &format!("rollout-2026-10-23T10-31-40-{id}_{middle_id}.jsonl"),
+            &mid,
+        );
+        let c = write(
+            &dir,
+            &format!("rollout-2026-10-23T10-31-55-{id}_{newest_id}.jsonl"),
+            &last,
+        );
+        let reconstructed = build_chain(&[c, b, a]).unwrap();
+        let rows: Vec<Value> = reconstructed
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).unwrap())
+            .collect();
+        assert_eq!(rows.len(), 4); // original meta + three kept events
+        assert_eq!(
+            rows.iter()
+                .map(|r| r["ordinal"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![0, 1, 3, 5]
+        );
+        let text = String::from_utf8(reconstructed).unwrap();
+        assert!(!text.contains("aborted-root"));
+        assert!(!text.contains("aborted-mid"));
+        assert_eq!(text.matches("session_meta").count(), 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn fails_closed_for_missing_physical_parent_and_fork() {
+        let dir = test_folder();
+        let id = "thread";
+        let mut root = meta(id, "2026-10-19T09:00:00Z", None);
+        root.extend(record(
+            r#"{"type":"event_msg","payload":{"message":"first"}}"#,
+        ));
+        let a = write(&dir, "a.jsonl", &root);
+        let pointer = Some(("a", 2, root.len() as u64));
+        let b = write(&dir, "b.jsonl", &meta(id, "2026-10-19T10:00:00Z", pointer));
+        let c = write(&dir, "c.jsonl", &meta(id, "2026-10-19T11:00:00Z", pointer));
+        assert!(build_chain(&[a.clone(), b.clone(), c]).is_err()); // fork
+        let missing = write(
+            &dir,
+            "d.jsonl",
+            &meta(
+                id,
+                "2026-10-19T12:00:00Z",
+                Some(("missing", 2, root.len() as u64)),
+            ),
+        );
+        assert!(build_chain(&[a.clone(), missing]).is_err());
+        let out_of_bounds = write(
+            &dir,
+            "e.jsonl",
+            &meta(
+                id,
+                "2026-10-19T13:00:00Z",
+                Some(("a", 2, (root.len() + 1) as u64)),
+            ),
+        );
+        assert!(build_chain(&[a.clone(), out_of_bounds]).is_err());
+        let wrong_ordinal = write(
+            &dir,
+            "f.jsonl",
+            &meta(
+                id,
+                "2026-10-19T14:00:00Z",
+                Some(("a", 3, root.len() as u64)),
+            ),
+        );
+        assert!(build_chain(&[a.clone(), wrong_ordinal]).is_err());
+        let split = write(
+            &dir,
+            "g.jsonl",
+            &meta(
+                id,
+                "2026-10-19T15:00:00Z",
+                Some(("a", 2, (root.len() - 2) as u64)),
+            ),
+        );
+        assert!(build_chain(&[a, split]).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_unreachable_cycle_and_understands_compressed_physical_names() {
+        let id = "01a16681-f457-7013-9e48-b9982ef68e33";
+        let next = "01a16699-882b-7203-92f9-b859785f19d7";
+        let compressed = format!("rollout-2026-10-23T10-31-40-{id}_{next}.jsonl.zst");
+        assert_eq!(
+            physical_rollout_id(Path::new(&compressed), id).unwrap(),
+            next
+        );
+        let dir = test_folder();
+        let a = write(&dir, "a.jsonl", &meta(id, "2026-10-23T10:00:00Z", None));
+        let b = write(
+            &dir,
+            "b.jsonl",
+            &meta(id, "2026-10-23T10:02:00Z", Some(("c", 1, 1))),
+        );
+        let c = write(
+            &dir,
+            "c.jsonl",
+            &meta(id, "2026-10-23T10:01:00Z", Some(("b", 1, 1))),
+        );
+        assert!(build_chain(&[a, b, c]).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_wrong_filename_logical_identity() {
+        let dir = test_folder();
+        let id = "01a16681-f457-7013-9e48-b9982ef68e33";
+        let impostor = "01a1665e-ea61-7530-bfd6-4359b4ad9aa5";
+        let a = write(
+            &dir,
+            &format!("rollout-2026-10-23T10-05-55-{impostor}.jsonl"),
+            &meta(id, "2026-10-23T10:05:55Z", None),
+        );
+        assert!(load(&a).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn rejects_duplicate_complete_roots_and_conflicting_cwd() {
         let dir = test_folder();
         let id = "thread";
@@ -514,7 +885,11 @@ mod tests {
         let b = write(&dir, "b.jsonl", &meta(id, "2026-10-19T11:08:31Z", None));
         assert!(build_chain(&[a.clone(), b.clone()]).is_err());
         let initial = fs::read(&a).unwrap();
-        let mut continuation = meta(id, "2026-10-19T11:08:31Z", Some((1, initial.len() as u64)));
+        let mut continuation = meta(
+            id,
+            "2026-10-19T11:08:31Z",
+            Some(("a", 1, initial.len() as u64)),
+        );
         continuation = String::from_utf8(continuation)
             .unwrap()
             .replace("SYNTHETIC_CONTINUATION", "OTHER")
