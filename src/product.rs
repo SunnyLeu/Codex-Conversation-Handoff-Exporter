@@ -366,7 +366,9 @@ fn execute(
     args.output_directory = crate::destination::absolute(output)?;
     args.project_id = (target.kind == Kind::Project).then(|| target.id.clone());
     args.thread_id = (target.kind == Kind::IndependentThread).then(|| target.id.clone());
-    args.expected_state = Some(fingerprint.into());
+    // An explicit --yes Project/Thread ID is revalidated against live scope
+    // before writing; unrelated sidebar reordering must not reject it.
+    args.expected_state = (!yes).then(|| fingerprint.into());
     crate::destination::validate_path(&args.output_directory, args)?;
     // build_all_candidates resolves the complete logical scope and calls
     // validate_existing *before* creating, writing or cleaning Handoffs.

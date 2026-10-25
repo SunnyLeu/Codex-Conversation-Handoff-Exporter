@@ -5,6 +5,14 @@
 
 這是非官方社群專案，並非 OpenAI 的產品，也未獲 OpenAI 背書。
 
+## 2.0.3 修正說明：來源一致性與首頁殘留對話
+
+- 無人值守的 `--project-id ... --yes` 匯出，改為在寫入前複查**本次專案**的主對話、子代理、實體 Rollout、標題與專案身分；新增的目標對話／續接會拒絕使用舊掃描結果，避免無聲漏匯。
+- 其他專案的 Rollout、標題、附件及 SQLite WAL 變更，不再單憑全域雜湊差異阻擋本專案匯出。實際由本次來源讀取的附件檔案仍會檢查前後一致。
+- 若 Codex 尚未寫出可辨識的新 Session，匯出器無法預知它將出現；本次修正不宣稱能繞過 Codex 保存延遲，亦不會忽略本專案仍在更新的來源。
+- 首頁獨立對話將以全域狀態中的 `projectless-thread-ids` 與現行 SQLite Thread 索引交集判定顯示；資料庫中找不到或已封存的殘留 ID 不再列出，且不修改 Codex 原始狀態。明示 `--project-id`／`--thread-id` 的匯出路徑保持原有來源安全檢查。
+- Windows 11 x64 已完成 174 項 Rust 單元測試、七組合成端到端測試及首頁對話清單實機核對；剛結束對話的即時匯出已有初步正常回報，仍受 Codex Session 寫入時序限制。
+
 ## 2.0.2 修正說明
 
 - 多段 `history_base` 續接改依實體 Rollout ID 對應父檔，並在該父檔驗證相對位元組 Offset 與邏輯 Ordinal，不會錯把 Offset 套用到整條已合併歷史。
@@ -16,7 +24,7 @@
 在本儲存庫的 [Releases](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/releases)
 下載 Windows x64 套件：
 
-`Codex-Conversation-Handoff-Exporter-2.0.2-windows-x64.zip`
+`Codex-Conversation-Handoff-Exporter-2.0.3-windows-x64.zip`
 
 解壓後執行 `Codex-Conversation-Handoff-Exporter.exe`。
 EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔，可以移至自己偏好的位置。
@@ -91,7 +99,7 @@ Windows 捷徑的「目標」可使用：
 預設讀取目前使用者的 `%USERPROFILE%\.codex`；
 有設定絕對路徑的 `CODEX_HOME` 時優先使用該位置，與 EXE 所在位置無關。
 
-選單只讀側邊欄狀態與必要標題，不預先解析整個專案。
+首頁選單只讀側邊欄狀態與必要標題，不預先解析整個專案；若有 Codex SQLite Thread 資料庫，首頁亦以輕量唯讀查詢排除已不在資料庫或已封存的獨立對話。沒有 SQLite 資料庫時沿用既有狀態清單相容模式。
 按 `E` 後才驗證選定目標及讀取 Session。側邊欄狀態、索引或本機紀錄缺失時，
 程式會明確失敗，不會猜測其他 ID、固定路徑或對話歸屬。
 

@@ -7092,6 +7092,9 @@ fn read_attachment_from_disk(
             .join(&reference.attachment_id)
             .join(&reference.filename)
     };
+    // Observe only this selected Rollout's disk fallback dependencies. A
+    // different project's newly written attachment must not block export.
+    source_guard::record_attachment_path(&path);
     if !path.is_file() {
         return (None, "missing".to_string());
     }
@@ -17075,11 +17078,6 @@ fn build_all_candidates(
     // output write/delete if the Codex project registry is unavailable or
     // inconsistent. Historical test fixtures must opt into legacy mode.
     let membership_start = Instant::now();
-    let input_guard = if args.product_mode {
-        Some(source_guard::InputGuard::capture(args, &files)?)
-    } else {
-        None
-    };
     if write_outputs {
         destination::validate_path(&args.output_directory, args)?;
     }
@@ -17157,6 +17155,20 @@ fn build_all_candidates(
     };
 
     let project_membership_time = membership_start.elapsed();
+    // Capture exactly the selected project's physical source identity before
+    // conversion. Unrelated active Codex threads must not invalidate this run.
+    let input_guard = if args.product_mode {
+        Some(source_guard::InputGuard::capture(
+            args,
+            project_scope
+                .as_ref()
+                .expect("product mode resolves a scope"),
+            &title_index,
+            &project_membership::read_stable_state(&project_state_path(args))?,
+        )?)
+    } else {
+        None
+    };
     // Materialize only confirmed multi-file continuations as isolated,
     // ephemeral logical rollouts. This occurs before any output write/delete.
     // No Codex source rollout is renamed, removed or edited.

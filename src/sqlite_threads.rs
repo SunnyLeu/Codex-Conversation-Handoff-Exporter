@@ -54,7 +54,7 @@ impl Drop for Statement {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ThreadRow {
     pub(crate) title: String,
     pub(crate) archived: bool,

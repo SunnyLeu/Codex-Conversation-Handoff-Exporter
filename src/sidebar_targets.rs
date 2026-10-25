@@ -1,4 +1,6 @@
 //! A fast sidebar catalogue. Never enumerate or parse rollout files here.
+//! For the interactive chooser only, cross-check independent IDs against the
+//! current read-only SQLite thread index; the global state may retain ghosts.
 //! The catalogue describes *candidate* choices; export-time source, ancestry,
 //! archive and destination validation remain mandatory before any write.
 use crate::project_membership;
@@ -94,8 +96,10 @@ fn string_list(state: &Value, key: &str, required: bool) -> Result<Vec<String>> 
     Ok(output)
 }
 
-/// Opening the chooser must never touch `sessions/`, Zstandard, or SQLite.
-/// The index is used only to label explicitly listed independent Threads.
+/// Opening the chooser never scans `sessions/` or parses Zstandard.
+/// Title index is only a label source. For the unparameterized interactive
+/// chooser, a lightweight SQLite point lookup removes stale global-state IDs.
+/// Explicit --project-id/--thread-id invocation keeps its export-time checks.
 pub(crate) fn load(args: &crate::Args) -> Result<Catalogue> {
     let path = crate::project_state_path(args);
     let state = project_membership::read_stable_state(&path)?;
@@ -108,10 +112,43 @@ pub(crate) fn load(args: &crate::Args) -> Result<Catalogue> {
     } else {
         HashMap::new()
     };
-    // Render the captured, complete state view immediately. Codex may update
-    // its sidebar during title lookup; the selected ID and membership are
-    // rechecked at E/--yes, rather than delaying menu entry or failing here.
-    from_state(&state, &titles)
+    // Project-scoped and explicit independent invocation must not depend on
+    // unrelated SQLite rows. They are validated again when exporting.
+    let mut catalogue = from_state(&state, &titles)?;
+    if independent && args.project_id.is_none() && args.thread_id.is_none() {
+        let home = args
+            .sessions_root
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("無效的 Codex Session 目錄"))?;
+        // Preserve the legacy state-only chooser if there is no thread DB at
+        // all. A present DB, however, must not resurrect missing/archived IDs.
+        if crate::sqlite_threads::database_path(home)?.is_some() {
+            retain_live_independent_targets(&mut catalogue, |id| {
+                crate::sqlite_threads::lookup_one(home, id).map(|row| row.map(|row| !row.archived))
+            })?;
+        }
+    }
+    // Codex can update the sidebar during title/SQLite lookup. At E/--yes
+    // the full state, selected target and source files are checked again.
+    Ok(catalogue)
+}
+
+/// Filter only the interactive independent-thread choices. Never use a missing
+/// or archived SQLite row to rewrite Codex state or to infer deletion of source
+/// rollout files. Project choices and source validation are unchanged.
+fn retain_live_independent_targets(
+    catalogue: &mut Catalogue,
+    mut live: impl FnMut(&str) -> Result<Option<bool>>,
+) -> Result<()> {
+    let mut accepted = Vec::with_capacity(catalogue.targets.len());
+    for target in &catalogue.targets {
+        if target.kind == Kind::IndependentThread && live(&target.id)? != Some(true) {
+            continue;
+        }
+        accepted.push(target.clone());
+    }
+    catalogue.targets = accepted;
+    Ok(())
 }
 
 /// Pure sidebar projection, with no filesystem or SQLite access.
@@ -177,8 +214,8 @@ pub(crate) fn from_state(state: &Value, index: &HashMap<String, String>) -> Resu
             ));
             continue;
         }
-        // The sidebar state grants candidate visibility, not proof of a
-        // readable Root or non-archived Thread. Verify those only on export.
+        // State-only candidate projection; the interactive menu filters
+        // missing/archived SQLite IDs, while export checks remain mandatory.
         output.targets.push(Target {
             kind: Kind::IndependentThread,
             id: id.clone(),
@@ -257,6 +294,57 @@ mod tests {
         assert!(cat.targets[0].pinned);
         assert!(cat.select(Kind::Project, "hidden").is_err());
     }
+    #[test]
+    fn interactive_menu_hides_stale_and_archived_independent_ids() {
+        // Synthetic analogue of the observed seven global-state IDs, four
+        // live SQLite rows and three stale state-only IDs.
+        let state = serde_json::json!({
+            "local-projects": {"p": {"id":"p", "name":"Project", "rootPaths":["D:\\work"]}},
+            "project-order": ["p"],
+            "projectless-thread-ids": ["ghost-a", "live-a", "ghost-b", "live-b", "archived", "live-c", "live-d"],
+            "thread-project-assignments": {}
+        });
+        let mut cat = from_state(&state, &HashMap::new()).unwrap();
+        let fingerprint = cat.fingerprint.clone();
+        let mut queried = Vec::new();
+        retain_live_independent_targets(&mut cat, |id| {
+            queried.push(id.to_owned());
+            Ok(match id {
+                "live-a" | "live-b" | "live-c" | "live-d" => Some(true),
+                "archived" => Some(false),
+                _ => None,
+            })
+        })
+        .unwrap();
+        assert_eq!(
+            cat.targets
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            ["p", "live-a", "live-b", "live-c", "live-d"]
+        );
+        assert_eq!(queried.len(), 7);
+        assert_eq!(cat.fingerprint, fingerprint);
+        assert!(cat.unavailable.is_empty()); // Do not display ghosts elsewhere.
+        assert!(cat.select(Kind::IndependentThread, "ghost-a").is_err());
+        assert!(cat.select(Kind::Project, "p").is_ok());
+    }
+
+    #[test]
+    fn interactive_sqlite_lookup_error_is_not_silently_ignored() {
+        let state = serde_json::json!({
+            "local-projects": {}, "project-order": [],
+            "projectless-thread-ids": ["independent"]
+        });
+        let mut cat = from_state(&state, &HashMap::new()).unwrap();
+        assert!(
+            retain_live_independent_targets(&mut cat, |_| {
+                anyhow::bail!("synthetic SQLite read failure")
+            })
+            .is_err()
+        );
+    }
+
     #[test]
     fn conflicting_projectless_assignment_is_not_selectable() {
         let state = serde_json::json!({
