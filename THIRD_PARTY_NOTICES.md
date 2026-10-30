@@ -1,8 +1,8 @@
-# Third-party notices — Codex Conversation Handoff Exporter 2.0.1
+# Third-party notices — Codex Conversation Handoff Exporter 2.1.0
 
 The application is MIT-licensed; each dependency retains its own license.
-Inventory generated from Windows qualification Cargo metadata and sources.
-The inventory contains some target-specific/build-only crates as well.
+The package-version inventory is reconciled to the pinned 2.1.0 Cargo.lock.
+It includes target-specific and build-only crates; grouped third-party license texts are retained.
 
 ## Zstandard and native code
 
@@ -32,7 +32,7 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `block-buffer` | `0.12.1` | MIT OR Apache-2.0 |
 | `bumpalo` | `3.20.3` | MIT OR Apache-2.0 |
 | `bytes` | `1.12.1` | MIT |
-| `cc` | `1.8.0` | MIT OR Apache-2.0 |
+| `cc` | `1.10.0` | MIT OR Apache-2.0 |
 | `cfg-if` | `1.0.5` | MIT OR Apache-2.0 |
 | `chrono` | `0.4.45` | MIT OR Apache-2.0 |
 | `clap` | `4.6.7` | MIT OR Apache-2.0 |
@@ -51,7 +51,7 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `either` | `1.19.0` | MIT OR Apache-2.0 |
 | `equivalent` | `1.0.3` | Apache-2.0 OR MIT |
 | `faststr` | `0.2.34` | MIT OR Apache-2.0 |
-| `find-msvc-tools` | `0.1.14` | MIT OR Apache-2.0 |
+| `find-msvc-tools` | `0.1.15` | MIT OR Apache-2.0 |
 | `foldhash` | `0.2.0` | Zlib |
 | `futures-core` | `0.3.34` | MIT OR Apache-2.0 |
 | `futures-task` | `0.3.34` | MIT OR Apache-2.0 |
@@ -122,7 +122,7 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `typenum` | `1.20.1` | MIT OR Apache-2.0 |
 | `unicode-ident` | `1.0.27` | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | `utf8parse` | `0.2.2` | Apache-2.0 OR MIT |
-| `uuid` | `1.28.0` | Apache-2.0 OR MIT |
+| `uuid` | `1.29.0` | Apache-2.0 OR MIT |
 | `version_check` | `0.9.5` | MIT/Apache-2.0 |
 | `walkdir` | `2.5.0` | Unlicense/MIT |
 | `wasip2` | `1.0.4+wasi-0.2.12` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
@@ -1787,9 +1787,9 @@ DEALINGS IN THE SOFTWARE.
 
 ### Text 21 (SHA-256 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397)
 
-- cc 1.8.0: LICENSE-MIT
+- cc 1.10.0: LICENSE-MIT
 - cfg-if 1.0.5: LICENSE-MIT
-- find-msvc-tools 0.1.14: LICENSE-MIT
+- find-msvc-tools 0.1.15: LICENSE-MIT
 - jobserver 0.1.35: LICENSE-MIT
 - js-sys 0.3.105: LICENSE-MIT
 - pkg-config 0.3.34: LICENSE-MIT
@@ -2247,7 +2247,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### Text 24 (SHA-256 436bc5a105d8e57dcd8778730f3754f7bf39c14d2f530e4cde4bd2d17a83ec3d)
 
-- uuid 1.28.0: LICENSE-MIT
+- uuid 1.29.0: LICENSE-MIT
 
 ````text
 Copyright (c) 2014 The Rust Project Developers
@@ -4426,7 +4426,7 @@ DEALINGS IN THE SOFTWARE.
 - ahash 0.8.12: LICENSE-APACHE
 - autocfg 1.5.1: LICENSE-APACHE
 - bumpalo 3.20.3: LICENSE-APACHE
-- cc 1.8.0: LICENSE-APACHE
+- cc 1.10.0: LICENSE-APACHE
 - cfg-if 1.0.5: LICENSE-APACHE
 - core-foundation-sys 0.8.7: LICENSE-APACHE
 - crossbeam-deque 0.8.8: LICENSE-APACHE
@@ -4434,7 +4434,7 @@ DEALINGS IN THE SOFTWARE.
 - crossbeam-utils 0.8.23: LICENSE-APACHE
 - either 1.19.0: LICENSE-APACHE
 - equivalent 1.0.3: LICENSE-APACHE
-- find-msvc-tools 0.1.14: LICENSE-APACHE
+- find-msvc-tools 0.1.15: LICENSE-APACHE
 - hashbrown 0.17.1: LICENSE-APACHE
 - heck 0.5.0: LICENSE-APACHE
 - indexmap 2.14.2: LICENSE-APACHE
@@ -4449,7 +4449,7 @@ DEALINGS IN THE SOFTWARE.
 - regex 1.13.1: LICENSE-APACHE
 - regex-automata 0.4.18: LICENSE-APACHE
 - regex-syntax 0.8.11: LICENSE-APACHE
-- uuid 1.28.0: LICENSE-APACHE
+- uuid 1.29.0: LICENSE-APACHE
 - version_check 0.9.5: LICENSE-APACHE
 - wasip2 1.0.4+wasi-0.2.12: LICENSE-APACHE
 - wasm-bindgen 0.2.128: LICENSE-APACHE
