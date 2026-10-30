@@ -1,0 +1,639 @@
+{
+  "scope": "DEIDENTIFIED REAL-CASE DERIVATIVES, NOT ORIGINAL RAW BYTES. Object/array/key/type shapes and operational enums retained; free text and identifiers replaced. Not a full live-corpus validation.",
+  "cases": [
+    {
+      "audit_example": "structured_result_root-f727-L64.json",
+      "evidence_file_sha256": "d91dc41de9ec7eb30c8a770c411fdb727560c0f3bc30e9e8aae1e94efa8247ce",
+      "source_record_sha256": "7db0455313dd55e08a93e0c6069d554332ad70ff8c7d3ae4cde10e8a66c07472",
+      "record": {
+        "timestamp": "2026-10-29T10:00:00Z",
+        "ordinal": 63,
+        "type": "event_msg",
+        "payload": {
+          "type": "item_completed",
+          "thread_id": "deidentified-376f439640",
+          "turn_id": "deidentified-24672cf458",
+          "item": {
+            "type": "McpToolCall",
+            "id": "deidentified-fb72276657",
+            "server": "deidentified-6af41521fd",
+            "tool": "deidentified-1831f6bd63",
+            "arguments": {
+              "repo_full_name": "deidentified-413f6b8e59",
+              "run_id": 123
+            },
+            "connectorId": "deidentified-250c3fc7b5",
+            "linkId": "deidentified-6cd0fa8cd0",
+            "appName": "deidentified-f911e414cf",
+            "actionName": "deidentified-7a42229f7e",
+            "readOnlyHint": true,
+            "status": "completed",
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "deidentified-d466be6feb"
+                }
+              ],
+              "structuredContent": {
+                "jobs": [
+                  {
+                    "id": 123,
+                    "name": "deidentified-99b73bf70a",
+                    "status": "completed",
+                    "conclusion": "deidentified-aee408847d",
+                    "run_id": 123,
+                    "logs_url": null,
+                    "steps": [
+                      {
+                        "name": "deidentified-0f18368152",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 1
+                      },
+                      {
+                        "name": "deidentified-aaf7bc06ae",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 2
+                      },
+                      {
+                        "name": "deidentified-8c0763dc4c",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 3
+                      },
+                      {
+                        "name": "deidentified-f42f10d914",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 4
+                      },
+                      {
+                        "name": "deidentified-9846c4ab96",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 5
+                      },
+                      {
+                        "name": "deidentified-21f4c3707a",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 6
+                      },
+                      {
+                        "name": "deidentified-b2901fddd0",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 10
+                      },
+                      {
+                        "name": "deidentified-44e1fa1394",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 11
+                      },
+                      {
+                        "name": "deidentified-bbc95cc1d9",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 12
+                      },
+                      {
+                        "name": "deidentified-a007f8748e",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 13
+                      }
+                    ]
+                  },
+                  {
+                    "id": 123,
+                    "name": "deidentified-dd0d6c2b2e",
+                    "status": "completed",
+                    "conclusion": "deidentified-aee408847d",
+                    "run_id": 123,
+                    "logs_url": null,
+                    "steps": [
+                      {
+                        "name": "deidentified-0f18368152",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 1
+                      },
+                      {
+                        "name": "deidentified-aaf7bc06ae",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 2
+                      },
+                      {
+                        "name": "deidentified-90da82560e",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 3
+                      },
+                      {
+                        "name": "deidentified-8c0763dc4c",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 4
+                      },
+                      {
+                        "name": "deidentified-f42f10d914",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 5
+                      },
+                      {
+                        "name": "deidentified-45f6601ac8",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 6
+                      },
+                      {
+                        "name": "deidentified-17ee234db8",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 7
+                      },
+                      {
+                        "name": "deidentified-9846c4ab96",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 8
+                      },
+                      {
+                        "name": "deidentified-7888eebc5b",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 9
+                      },
+                      {
+                        "name": "deidentified-7f6ea7933b",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 10
+                      },
+                      {
+                        "name": "deidentified-ab3b282600",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 17
+                      },
+                      {
+                        "name": "deidentified-b2901fddd0",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 18
+                      },
+                      {
+                        "name": "deidentified-44e1fa1394",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 19
+                      },
+                      {
+                        "name": "deidentified-bbc95cc1d9",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 20
+                      },
+                      {
+                        "name": "deidentified-a007f8748e",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 21
+                      }
+                    ]
+                  },
+                  {
+                    "id": 123,
+                    "name": "deidentified-0d4a57e6d6",
+                    "status": "completed",
+                    "conclusion": "deidentified-aee408847d",
+                    "run_id": 123,
+                    "logs_url": null,
+                    "steps": [
+                      {
+                        "name": "deidentified-0f18368152",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 1
+                      },
+                      {
+                        "name": "deidentified-aaf7bc06ae",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 2
+                      },
+                      {
+                        "name": "deidentified-8c0763dc4c",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 3
+                      },
+                      {
+                        "name": "deidentified-f42f10d914",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 4
+                      },
+                      {
+                        "name": "deidentified-9846c4ab96",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 5
+                      },
+                      {
+                        "name": "deidentified-21f4c3707a",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 6
+                      },
+                      {
+                        "name": "deidentified-b2901fddd0",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 10
+                      },
+                      {
+                        "name": "deidentified-44e1fa1394",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 11
+                      },
+                      {
+                        "name": "deidentified-bbc95cc1d9",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 12
+                      },
+                      {
+                        "name": "deidentified-a007f8748e",
+                        "status": "completed",
+                        "conclusion": "deidentified-aee408847d",
+                        "number": 13
+                      }
+                    ]
+                  }
+                ]
+              },
+              "isError": false
+            },
+            "duration": {
+              "secs": 0,
+              "nanos": 627969300
+            }
+          },
+          "started_at_ms": 1792510687401,
+          "completed_at_ms": 1792510688031
+        }
+      }
+    },
+    {
+      "audit_example": "screenshot_parameters-f786-L1725.json",
+      "evidence_file_sha256": "f2b8ca4fcd298441d8b584c53e468b0ab297281f0d2bad320988b572c95c6050",
+      "source_record_sha256": "e125d62b009d9726267d4a9cfb1f564241a7e611a43b2c701867ed07a447f465",
+      "record": {
+        "timestamp": "2026-10-29T10:00:00Z",
+        "ordinal": 2151,
+        "type": "event_msg",
+        "payload": {
+          "type": "item_completed",
+          "thread_id": "deidentified-f7b8717333",
+          "turn_id": "deidentified-ebd012717f",
+          "item": {
+            "type": "McpToolCall",
+            "id": "deidentified-dbd62d25ab",
+            "server": "deidentified-6af41521fd",
+            "tool": "deidentified-7478d065a4",
+            "arguments": {
+              "screenshot": [
+                {
+                  "ref_id": "deidentified-55dcaf06ad",
+                  "pageno": 0
+                }
+              ],
+              "response_length": "deidentified-f9b0078b5d"
+            },
+            "connectorId": "deidentified-e99e4c9e9c",
+            "linkId": "deidentified-0aee92597d",
+            "appName": "deidentified-c442a86411",
+            "actionName": "deidentified-16a36093dd",
+            "readOnlyHint": true,
+            "status": "completed",
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "deidentified-5ac1bb6687"
+                }
+              ],
+              "isError": false,
+              "_meta": {
+                "raw_messages": [
+                  {
+                    "id": "deidentified-36f690a795",
+                    "author": {
+                      "role": "tool",
+                      "name": "deidentified-98a958afcb",
+                      "metadata": {
+                        "real_author": "deidentified-5c29925e97"
+                      }
+                    },
+                    "create_time": null,
+                    "update_time": null,
+                    "content": {
+                      "content_type": "deidentified-8a427044fe",
+                      "url": "",
+                      "domain": "",
+                      "title": "deidentified-8e895ff9cd",
+                      "text": "deidentified-2ad3511180",
+                      "snippet": "deidentified-4034e8beff",
+                      "pub_date": null,
+                      "crawl_date": null,
+                      "pub_timestamp": null,
+                      "crawl_timestamp": null,
+                      "ref_id": "deidentified-64eedf05cb"
+                    },
+                    "status": "finished_successfully",
+                    "end_turn": null,
+                    "weight": 1.0,
+                    "metadata": {
+                      "__internal": {
+                        "sonic_browser_tool": {
+                          "turn_index": 1,
+                          "successful_turn_index": 1,
+                          "execution_mode": "deidentified-87b04e5896",
+                          "content": {
+                            "turn0view0": {
+                              "url": "",
+                              "title": "deidentified-8e895ff9cd",
+                              "ref_type": "deidentified-2bcb43cbc8",
+                              "content_type": null,
+                              "anchor": "deidentified-4034e8beff",
+                              "anchor_type": "deidentified-ec91fdd925",
+                              "lineno": null,
+                              "pageno": null,
+                              "height": null,
+                              "offset": null
+                            }
+                          },
+                          "link_urls": {
+                            "turn0view0": {}
+                          },
+                          "num_image_queries": 0,
+                          "commerce_blocked_canvas": false,
+                          "image_group_shown": false,
+                          "elapsed_tokens": 68,
+                          "elapsed_queries": 0,
+                          "post_parser_search_tool_key_counts": {},
+                          "min_tokens": 4096,
+                          "default_tokens": 6144,
+                          "max_tokens": 8192,
+                          "system1_tokens": null,
+                          "system2_tokens": null,
+                          "effective_min_tokens": 4096,
+                          "effective_default_tokens": 6144,
+                          "effective_max_tokens": 8192,
+                          "n_tokens": 4096,
+                          "num_product_queries": 0,
+                          "product_queries": [],
+                          "product_lookup_keys_by_ref_id": {},
+                          "refid_randomizer_state": {
+                            "version": 1,
+                            "seed": 930493933315,
+                            "turn_to_randomized_id": {
+                              "turn0": "deidentified-15d5e3a4af"
+                            },
+                            "refid_to_randomized_id": {
+                              "turn0view0": "deidentified-64eedf05cb"
+                            }
+                          }
+                        },
+                        "sonic_thread_id": "deidentified-fead67cc00",
+                        "sonic_turn_index": 1,
+                        "sonic_user_id": "deidentified-ab8e5b68c2",
+                        "precise_location_metadata": null,
+                        "search_artifacts": {
+                          "fetched_images": [],
+                          "api_products": {
+                            "products": []
+                          },
+                          "businesses": {
+                            "ref_id_to_result": {},
+                            "results_map": {},
+                            "fetches": [],
+                            "businesses": [],
+                            "diagnostics": [
+                              {
+                                "name": "deidentified-98156452b0",
+                                "location": null,
+                                "description": "deidentified-91939d0cb9",
+                                "cite": null,
+                                "ref_id": null
+                              }
+                            ]
+                          },
+                          "search_costs": {
+                            "subagent_uncached_prompted_tokens": 0,
+                            "labrador_cpu_seconds": 0.0,
+                            "ranker_prompted_tokens": 0,
+                            "ranker_prompted_tokens_by_model": {},
+                            "incomplete": false
+                          },
+                          "ref_id_aliases": {
+                            "turn678762view0": "deidentified-bba4ec9881"
+                          }
+                        },
+                        "tool_cost_info": {
+                          "arg_lens": {
+                            "screenshot": 1
+                          }
+                        }
+                      },
+                      "sonic_tool_info": {
+                        "all_tools_call": {
+                          "screenshot": [
+                            {
+                              "ref_id": "deidentified-55dcaf06ad",
+                              "pageno": 0
+                            }
+                          ],
+                          "response_length": "deidentified-f9b0078b5d",
+                          "n_tokens": 4096
+                        }
+                      },
+                      "debug_sonic_thread_id": "deidentified-fead67cc00",
+                      "search_engine": null,
+                      "result_source": null,
+                      "ref_id": "deidentified-64eedf05cb",
+                      "minimal_str": "deidentified-a470cc71b5",
+                      "n_tokens": 68,
+                      "upsert_skip_copy": true
+                    },
+                    "recipient": "deidentified-5ef5ef0364",
+                    "channel": "deidentified-f44e85c4b8"
+                  }
+                ],
+                "error": null,
+                "_codex_apps": {
+                  "resource_uri": "deidentified-e96262816a"
+                }
+              }
+            },
+            "duration": {
+              "secs": 0,
+              "nanos": 475510700
+            }
+          },
+          "started_at_ms": 1792734358873,
+          "completed_at_ms": 1792734359348
+        }
+      }
+    },
+    {
+      "audit_example": "aggregate_only_failure-f980-L203.json",
+      "evidence_file_sha256": "cf6bc85a086f4d47f8c8c7171feacb1c571f2da747a2e470b93de26a6ff8cf72",
+      "source_record_sha256": "4705b00645c778be144140e7b022578c432c21e076019dbc8dddf522177c733f",
+      "record": {
+        "timestamp": "2026-10-29T10:00:00Z",
+        "ordinal": 202,
+        "type": "event_msg",
+        "payload": {
+          "type": "item_completed",
+          "thread_id": "deidentified-0c88b87284",
+          "turn_id": "deidentified-75e3d37a7f",
+          "item": {
+            "type": "CommandExecution",
+            "id": "deidentified-9ca10e2335",
+            "process_id": "deidentified-20491a6928",
+            "command": [
+              "deidentified-0b3f7a6d90",
+              "deidentified-d63f742fef",
+              "deidentified-e3996f17b0",
+              "deidentified-cd7343ad0c"
+            ],
+            "cwd": "deidentified-df8e867ee7",
+            "parsed_cmd": [
+              {
+                "type": "unknown",
+                "cmd": "deidentified-cd7343ad0c"
+              }
+            ],
+            "source": "unified_exec_startup",
+            "status": "failed",
+            "aggregated_output": "deidentified-ce2abc8da3",
+            "exit_code": 1,
+            "duration": {
+              "secs": 1,
+              "nanos": 366085800
+            }
+          },
+          "started_at_ms": 1793268689572,
+          "completed_at_ms": 1793268690938
+        }
+      }
+    },
+    {
+      "audit_example": "web_openPage-f218-L31.json",
+      "evidence_file_sha256": "3b35a5f10733bf0bf6210774327ba02a45bf504b3cb21ab63acc29a00a05249d",
+      "source_record_sha256": "967e69ff452e957627e5ee96a281565f2b18ee8192929376505e16be06728d48",
+      "record": {
+        "timestamp": "2026-10-29T10:00:00Z",
+        "ordinal": 30,
+        "type": "event_msg",
+        "payload": {
+          "type": "item_completed",
+          "thread_id": "deidentified-761bd3bf8a",
+          "turn_id": "deidentified-fbe217d8ba",
+          "item": {
+            "type": "Extension",
+            "kind": "web.search",
+            "id": "deidentified-eae0da0922",
+            "query": "deidentified-167611685d",
+            "action": {
+              "type": "openPage",
+              "url": "deidentified-167611685d"
+            },
+            "results": [
+              {
+                "type": "text_result",
+                "domain": "deidentified-4a6d1ad53d",
+                "ref_id": "deidentified-93890ec075",
+                "snippet": "deidentified-34efe0e025",
+                "thumbnail_url": "deidentified-c2dfb80422",
+                "title": "deidentified-75eb3274e6",
+                "url": "deidentified-167611685d"
+              },
+              {
+                "type": "text_result",
+                "domain": "deidentified-4a6d1ad53d",
+                "ref_id": "deidentified-c88f138c28",
+                "snippet": "deidentified-b364581bb5",
+                "thumbnail_url": "deidentified-2def0660cc",
+                "title": "deidentified-3f7de72566",
+                "url": "deidentified-5f5105293e"
+              },
+              {
+                "type": "text_result",
+                "domain": "deidentified-4a6d1ad53d",
+                "ref_id": "deidentified-c2b352e921",
+                "snippet": "deidentified-16b39b2fa7",
+                "thumbnail_url": "deidentified-f6c4a22ac8",
+                "title": "deidentified-7d50e252df",
+                "url": "deidentified-5ab17717d0"
+              },
+              {
+                "type": "text_result",
+                "domain": "deidentified-4a6d1ad53d",
+                "ref_id": "deidentified-52e7b92f9c",
+                "snippet": "deidentified-208e05b18c",
+                "thumbnail_url": "deidentified-0b2e140555",
+                "title": "deidentified-47baa3a74e",
+                "url": "deidentified-2f070ede3e"
+              }
+            ]
+          },
+          "started_at_ms": 1787506061877,
+          "completed_at_ms": 1787506063296
+        }
+      }
+    },
+    {
+      "audit_example": "mcp_error-f214-L114.json",
+      "evidence_file_sha256": "6a3927a76f4f6846d43b3da3a43a39b3eac0f8fe6e3f8a39344c0e400104bc54",
+      "source_record_sha256": "4b572054ff0dade71e55e4da753156e7a8489ddde6e363495ad7d927512701b2",
+      "record": {
+        "timestamp": "2026-10-29T10:00:00Z",
+        "ordinal": 113,
+        "type": "event_msg",
+        "payload": {
+          "type": "item_completed",
+          "thread_id": "deidentified-b5d79b7f1a",
+          "turn_id": "deidentified-b6913d08f1",
+          "item": {
+            "type": "McpToolCall",
+            "id": "deidentified-173a2bca82",
+            "server": "deidentified-616efbe968",
+            "tool": "deidentified-954834e0ce",
+            "arguments": {
+              "server": "deidentified-616efbe968"
+            },
+            "status": "failed",
+            "error": {
+              "message": "deidentified-f233ea153c"
+            },
+            "duration": {
+              "secs": 0,
+              "nanos": 11900
+            }
+          },
+          "started_at_ms": 1787503901947,
+          "completed_at_ms": 1787503901947
+        }
+      }
+    }
+  ]
+}

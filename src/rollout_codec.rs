@@ -3,7 +3,6 @@
 //! The `zstd` Cargo dependency delegates streaming decompression to zstd-safe,
 //! with the native Zstandard library built statically from zstd-sys sources.
 use anyhow::{Context, Result, bail};
-use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use zstd::zstd_safe::{self, DCtx, InBuffer, OutBuffer};
@@ -73,16 +72,29 @@ fn decode_zstd_with_limit(compressed: &[u8], path: &Path, max_output: usize) -> 
 /// A read-only fixed snapshot; compressed content is validated to the end of
 /// its frame(s), so late corruption cannot be silently treated as valid JSON.
 pub(crate) fn read_rollout_snapshot(path: &Path) -> Result<Vec<u8>> {
-    let file = File::open(path).with_context(|| format!("open rollout {}", path.display()))?;
-    let snapshot_len = file.metadata()?.len();
+    let mut file = crate::open_shared_read(path)
+        .with_context(|| format!("open rollout {}", path.display()))?;
+    let captured = crate::source_guard::snapshot_for(path);
+    let snapshot_len = captured.map_or(file.metadata()?.len(), |snapshot| snapshot.len);
     let mut stored = Vec::with_capacity(
         usize::try_from(snapshot_len)
             .unwrap_or(16 * 1024 * 1024)
             .min(16 * 1024 * 1024),
     );
-    file.take(snapshot_len)
+    file.by_ref()
+        .take(snapshot_len)
         .read_to_end(&mut stored)
         .with_context(|| format!("read rollout snapshot {}", path.display()))?;
+    if stored.len() as u64 != snapshot_len {
+        bail!("Session 來源在讀取時被截斷：{}", path.display());
+    }
+    if let Some(snapshot) = captured {
+        use sha2::{Digest, Sha256};
+        let digest: [u8; 32] = Sha256::digest(&stored).into();
+        if digest != snapshot.digest {
+            bail!("Session 已讀取的快照前綴遭修改：{}", path.display());
+        }
+    }
     if is_compressed_rollout(path) {
         decode_zstd(&stored, path)
     } else {

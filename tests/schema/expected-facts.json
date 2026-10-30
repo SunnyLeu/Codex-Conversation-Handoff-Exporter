@@ -1,0 +1,281 @@
+{
+  "fixture_scope": "SYNTHETIC SOURCE-DERIVED CASES; no private data; not a full live-data certification",
+  "source_sha256": "f555c945ea3236531414e7467ed12d32b64e4f07d50f0462d5d161956e880a3f",
+  "cases": [
+    {
+      "name": "explicit schema version",
+      "path": "/handoff_schema_version",
+      "mode": "contains",
+      "value": "1.0"
+    },
+    {
+      "name": "new exporter version",
+      "path": "/exporter_version",
+      "mode": "contains",
+      "value": "2.1.0"
+    },
+    {
+      "name": "one root selected",
+      "path": "/conversation_id",
+      "mode": "contains",
+      "value": "66666666-6666-7666-8666-666666666666"
+    },
+    {
+      "name": "native result object",
+      "path": "/activities/*/structured_result/value/status",
+      "mode": "contains",
+      "value": "completed",
+      "json_type": "string"
+    },
+    {
+      "name": "native numeric result",
+      "path": "/activities/*/structured_result/value/metadata/duration_ms",
+      "mode": "contains",
+      "value": 120,
+      "json_type": "number"
+    },
+    {
+      "name": "native array null",
+      "path": "/activities/*/structured_result/value/items/1",
+      "mode": "contains",
+      "value": null,
+      "json_type": "null"
+    },
+    {
+      "name": "native business text is opaque",
+      "path": "/activities/*/structured_result/value/command_template",
+      "mode": "contains",
+      "value": "KEEP_NATIVE_BUSINESS_TEXT"
+    },
+    {
+      "name": "native code is a string",
+      "path": "/activities/*/structured_result/value/source_code",
+      "mode": "contains",
+      "value": "{\"do_not_parse\": true}",
+      "json_type": "string"
+    },
+    {
+      "name": "screenshot page remains numeric",
+      "path": "/activities/*/input_summary/value/screenshot/0/pageno",
+      "mode": "contains",
+      "value": 3,
+      "json_type": "number"
+    },
+    {
+      "name": "ordinary data key remains object",
+      "path": "/activities/*/input_summary/value/data/status",
+      "mode": "contains",
+      "value": "ordinary argument"
+    },
+    {
+      "name": "native tool error",
+      "path": "/activities/*/error_detail/value/message",
+      "mode": "contains",
+      "value": "SCHEMA_NATIVE_ERROR"
+    },
+    {
+      "name": "failed aggregate diagnostic",
+      "path": "/activities/*/executions/*/diagnostics/aggregated_output/segments/*/text",
+      "mode": "contains",
+      "value": "AttributeError: 'list' object has no attribute 'update'"
+    },
+    {
+      "name": "normalized openPage",
+      "path": "/activities/*",
+      "mode": "object_contains",
+      "value": {
+        "action": "openPage",
+        "open_count": 1
+      }
+    },
+    {
+      "name": "normalized open_page",
+      "path": "/activities/*",
+      "mode": "object_contains",
+      "value": {
+        "action": "open_page",
+        "open_count": 1
+      }
+    },
+    {
+      "name": "normalized findInPage",
+      "path": "/activities/*",
+      "mode": "object_contains",
+      "value": {
+        "action": "findInPage",
+        "find_count": 1
+      }
+    },
+    {
+      "name": "transport status completed",
+      "path": "/activities/*/status",
+      "mode": "contains",
+      "value": "completed"
+    },
+    {
+      "name": "business status queued",
+      "path": "/activities/*/result_envelope/projection/value/status",
+      "mode": "contains",
+      "value": "queued"
+    },
+    {
+      "name": "opaque cursor remains string",
+      "path": "/activities/*/result_envelope/projection/value/page/nextCursor",
+      "mode": "contains",
+      "value": "{\"offset\":20}",
+      "json_type": "string"
+    },
+    {
+      "name": "referenced turns are not in envelope",
+      "path": "/activities/*/result_envelope/projection/value/turns",
+      "mode": "absent"
+    },
+    {
+      "name": "malformed source is not repaired",
+      "path": "/activities/*/result_envelope/status",
+      "mode": "contains",
+      "value": "source_inner_not_parseable"
+    },
+    {
+      "name": "harness config effort",
+      "path": "/source_observations/events/settings/*/data/observation/value/reasoning/effort",
+      "mode": "contains",
+      "value": "ultra"
+    },
+    {
+      "name": "harness config attribution",
+      "path": "/source_observations/events/settings/*/data/source_authorship/harness_authored_configuration",
+      "mode": "contains",
+      "value": true,
+      "json_type": "boolean"
+    },
+    {
+      "name": "typed agent observation",
+      "path": "/source_observations/events/agents/*/data/observation/value/kind",
+      "mode": "contains",
+      "value": "started"
+    },
+    {
+      "name": "empty wait receiver list",
+      "path": "/source_observations/events/agents/*/data/observation/value/receiver_thread_ids",
+      "mode": "contains",
+      "value": [],
+      "json_type": "array"
+    },
+    {
+      "name": "confirmation order",
+      "path": "/source_observations/events/confirmations/*/data/value/acceptance_order",
+      "mode": "contains",
+      "value": 2
+    },
+    {
+      "name": "confirmed output identity",
+      "path": "/source_observations/events/confirmations/*/association_basis",
+      "mode": "contains",
+      "value": "same_selected_lineage_call_id"
+    },
+    {
+      "name": "retained exact source match",
+      "path": "/source_observations/events/retention/*/data/value/retained_message_refs/*/match_status",
+      "mode": "contains",
+      "value": "same_source_message_id_and_text_hash"
+    },
+    {
+      "name": "shorter retained text never replaces original",
+      "path": "/source_observations/events/retention/*/data/value/retained_message_refs/*/match_status",
+      "mode": "contains",
+      "value": "same_id_different_text_not_replaced"
+    },
+    {
+      "name": "image body not embedded",
+      "path": "/source_observations/events/media/*/data/body_in_handoff",
+      "mode": "contains",
+      "value": false
+    },
+    {
+      "name": "image hash refers to decoded source bytes",
+      "path": "/source_observations/events/media/*/data/sha256",
+      "mode": "contains",
+      "value": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+    },
+    {
+      "name": "no arbitrary file read",
+      "path": "/source_observations/events/media/*/data/file_availability",
+      "mode": "contains",
+      "value": "not_checked"
+    },
+    {
+      "name": "turn total not summed",
+      "path": "/source_observations/usage/turn_last_observations/*/observation/value/total_tokens",
+      "mode": "contains",
+      "value": 12
+    },
+    {
+      "name": "null usage not invented zero",
+      "path": "/source_observations/usage/turn_last_observations/*/observation/value/cached_input_tokens",
+      "mode": "contains",
+      "value": null,
+      "json_type": "null"
+    },
+    {
+      "name": "thread total distinct scope",
+      "path": "/source_observations/usage/thread_last_observation/observation/value/total_tokens",
+      "mode": "contains",
+      "value": 112
+    },
+    {
+      "name": "no final-billing claim",
+      "path": "/source_observations/usage/thread_last_observation/final_billing",
+      "mode": "contains",
+      "value": false
+    },
+    {
+      "name": "unknown event is visible",
+      "path": "/schema_coverage/unknowns/*/issue/observed",
+      "mode": "contains",
+      "value": "future_schema_event"
+    },
+    {
+      "name": "new field is visible",
+      "path": "/schema_coverage/unknowns/*/issue/path",
+      "mode": "contains",
+      "value": "/payload/future_native_setting"
+    },
+    {
+      "name": "no completeness claim",
+      "path": "/schema_coverage/semantic_completeness",
+      "mode": "contains",
+      "value": "not_certified_by_export_success"
+    },
+    {
+      "name": "no background or referenced dialogue becomes messages",
+      "path": "/messages/*/content",
+      "mode": "none_contains_text",
+      "value": [
+        "DO_NOT_MERGE_OTHER_THREAD",
+        "REPLACEMENT_NOT_NEW_USER",
+        "NOT_A_USER_MESSAGE"
+      ]
+    },
+    {
+      "name": "no source binary embedded anywhere",
+      "path": "",
+      "mode": "none_contains_text",
+      "value": [
+        "data:image/png;base64,YQ=="
+      ]
+    },
+    {
+      "name": "original user content remains",
+      "path": "/messages/*/content",
+      "mode": "text_contains",
+      "value": "SCHEMA_USER_MARKER"
+    },
+    {
+      "name": "original assistant content remains",
+      "path": "/messages/*/content",
+      "mode": "text_contains",
+      "value": "SCHEMA_ASSISTANT_MARKER"
+    }
+  ]
+}

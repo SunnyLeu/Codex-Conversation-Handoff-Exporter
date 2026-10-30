@@ -356,12 +356,15 @@ fn e06_dynamic_and_mcp_shapes_keep_errors_without_binary_metadata() {
     assert_eq!(d["success"], false);
     assert!(d.to_string().contains("invalid maxOutputChars"));
     let mcp = json!({"type":"McpToolCall","id":"m","server":"node_repl","tool":"js","status":"failed",
-        "arguments":{"code":"test","screenshot":"RAW_BINARY"},
-        "result":{"isError":true,"content":[{"type":"text","text":"access denied"},{"type":"image","data":"RAW_BINARY"}],"_meta":{"screenshot":"RAW_BINARY"}}});
+        "arguments":{"code":"test","screenshot":[{"ref_id":"pdf","pageno":3}],"binary_body":"data:image/png;base64,YQ=="},
+        "result":{"isError":true,"content":[{"type":"text","text":"access denied"},{"type":"image","mimeType":"image/png","data":"YQ=="}],"_meta":{"screenshot":"RAW_BINARY"}}});
     let m = typed_tool_activity(mcp.as_object().unwrap(), Some("t"), None, &Obj::new());
     assert_eq!(m["is_error"], true);
     assert_eq!(m["omitted_nontext_items"], 1);
+    // 二進位判斷依明示編碼，而非 screenshot 鍵名或任意文字標記。
     assert!(!m.to_string().contains("RAW_BINARY"));
+    assert!(!m.to_string().contains("YQ=="));
+    assert_eq!(m["input_summary"]["value"]["screenshot"][0]["pageno"], 3);
     assert!(m.to_string().contains("access denied"));
     assert_eq!(m["input_summary"]["omitted_binary"], true);
 }
@@ -371,7 +374,22 @@ fn e06_argument_budget_is_bounded_and_marked() {
         json!({"long":"x".repeat(8000),"nested":[{"a":"y".repeat(8000)},{"b":"z".repeat(8000)}]});
     let summary = compact_tool_arguments(&args);
     assert_eq!(summary["truncated"], true);
-    assert!(summary.to_string().len() < 3000);
+    // 新版以保留值的 JSON UTF-8 bytes 計量；省略證據不計入值預算。
+    assert!(
+        serde_json::to_vec(&summary["value"]).unwrap().len() <= schema::Limits::ARGUMENTS.bytes
+    );
+    assert_eq!(
+        summary["value"]["long"].as_str().unwrap().chars().count(),
+        schema::Limits::ARGUMENTS.string_chars
+    );
+    assert_eq!(summary["omissions"].as_array().unwrap().len(), 3);
+    assert!(
+        summary["omissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|v| v["reason"] == "string_prefix_only")
+    );
 }
 #[test]
 fn e06_rollback_does_not_resurrect_new_tool_activity() {

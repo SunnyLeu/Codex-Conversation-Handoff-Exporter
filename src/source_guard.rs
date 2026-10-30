@@ -1,10 +1,11 @@
 //! Target-scoped, read-only consistency fence for product exports.
 //!
-//! The selected physical Rollouts, relevant titles, target membership and
-//! attachments actually consulted must stay consistent until final writes.
-//! Updates to unrelated Codex projects, attachments or SQLite WAL records must
-//! not turn an otherwise complete export into a false failure. This is not a
-//! filesystem transaction and cannot predict a future, not-yet-written Session.
+//! The selected physical Rollouts are read at a fixed byte boundary, so Codex
+//! can append records while the exporter runs. The captured prefix is hashed
+//! and must remain unchanged; replacing or truncating that prefix still blocks
+//! the output. Newly created threads/continuations belong to the next export.
+//! Membership identity and consulted attachments remain protected. This is a
+//! bounded read of each physical file, not an atomic filesystem transaction.
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -15,18 +16,101 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::project_membership::{self, ProjectScope};
 
-fn digest(path: &Path) -> Result<[u8; 32]> {
-    let mut h = Sha256::new();
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RolloutSnapshot {
+    pub(crate) len: u64,
+    pub(crate) digest: [u8; 32],
+}
+
+// Product exports run once per process. Lookups are read-only and lock briefly;
+// no worker holds this mutex during file IO. Unselected files are unaffected.
+struct SnapshotRoster {
+    physical: BTreeMap<PathBuf, RolloutSnapshot>,
+    logical: HashMap<String, Vec<PathBuf>>,
+}
+static ROLLOUT_SNAPSHOTS: OnceLock<Mutex<Option<SnapshotRoster>>> = OnceLock::new();
+fn rollout_snapshots() -> &'static Mutex<Option<SnapshotRoster>> {
+    ROLLOUT_SNAPSHOTS.get_or_init(|| Mutex::new(None))
+}
+
+pub(crate) fn snapshot_for(path: &Path) -> Option<RolloutSnapshot> {
+    rollout_snapshots()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .and_then(|snapshots| snapshots.physical.get(path))
+        .copied()
+}
+
+/// Physical source byte bounds are part of each exported Handoff's evidence.
+/// This does not assert that several mutable files form an atomic transaction.
+/// A new physical continuation or new thread is not in this frozen roster.
+pub(crate) fn session_snapshot_metadata(session_id: &str) -> Option<Value> {
+    let state = rollout_snapshots()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let roster = state.as_ref()?;
+    let mut paths = roster.logical.get(session_id)?.clone();
+    paths.sort();
+    let mut entries = Vec::with_capacity(paths.len());
+    for path in &paths {
+        let snapshot = roster.physical.get(path)?;
+        let sha256 = snapshot
+            .digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        entries.push(serde_json::json!({
+            "path": path.to_string_lossy(),
+            "captured_bytes": snapshot.len,
+            "source_sha256": sha256,
+            "byte_scope": if crate::rollout_codec::is_compressed_rollout(path) {
+                "compressed_physical_file"
+            } else {
+                "physical_jsonl_prefix"
+            },
+        }));
+    }
+    Some(serde_json::json!({
+        "mode": "selected_physical_files_with_fixed_byte_limits",
+        "physical_files": entries,
+        "later_appends_and_new_files": "excluded_until_next_export",
+        "consistency": "per_file_verified_prefix_not_atomic_cross_file_snapshot"
+    }))
+}
+
+fn digest_prefix(path: &Path, len: u64) -> Result<[u8; 32]> {
     let mut file = crate::open_shared_read(path)?;
+    let mut h = Sha256::new();
+    let mut remaining = len;
     let mut buffer = [0u8; 65536];
-    loop {
-        let n = file.read(&mut buffer)?;
+    while remaining > 0 {
+        let request = usize::try_from(remaining.min(buffer.len() as u64))?;
+        let n = file
+            .read(&mut buffer[..request])
+            .with_context(|| format!("讀取來源快照 {}", path.display()))?;
         if n == 0 {
-            break;
+            bail!("Session 快照已截斷：{}；尚未覆寫 Handoff", path.display());
         }
         h.update(&buffer[..n]);
+        remaining -= n as u64;
     }
     Ok(h.finalize().into())
+}
+
+fn capture_snapshot(path: &Path) -> Result<RolloutSnapshot> {
+    let file = crate::open_shared_read(path)?;
+    let len = file.metadata()?.len();
+    drop(file);
+    Ok(RolloutSnapshot {
+        len,
+        digest: digest_prefix(path, len)?,
+    })
+}
+
+fn digest(path: &Path) -> Result<[u8; 32]> {
+    let len = crate::open_shared_read(path)?.metadata()?.len();
+    digest_prefix(path, len)
 }
 
 fn optional_digest(path: &Path) -> Result<Option<[u8; 32]>> {
@@ -38,9 +122,10 @@ fn optional_digest(path: &Path) -> Result<Option<[u8; 32]>> {
     }
 }
 
-// The disk attachment fallback is used only for references not recovered from
-// the selected Rollouts' tool output. Record the file at the moment it is read;
-// no other project's attachment tree is a dependency of this export.
+// Every selected attachment reference consulted for byte-exact verification
+// is a target-scoped dependency, even if the Rollout also contains tool output.
+// Record that file's state when first consulted; unrelated attachment trees
+// must not become export dependencies.
 struct AttachmentObservations {
     root: PathBuf,
     before: BTreeMap<PathBuf, Result<Option<[u8; 32]>, String>>,
@@ -123,7 +208,7 @@ fn target_project(state: &Value, id: Option<&str>) -> Result<Option<TargetProjec
     }))
 }
 
-fn selected_rollouts(scope: &ProjectScope) -> Vec<PathBuf> {
+pub(crate) fn selected_rollouts(scope: &ProjectScope) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = scope
         .selected_ids
         .iter()
@@ -159,7 +244,7 @@ fn target_sqlite_row(args: &crate::Args) -> Result<Option<crate::sqlite_threads:
 }
 
 pub(crate) struct InputGuard {
-    rollouts: BTreeMap<PathBuf, [u8; 32]>,
+    rollouts: BTreeMap<PathBuf, RolloutSnapshot>,
     titles: BTreeMap<String, Option<String>>,
     selected_ids: HashSet<String>,
     root_ids: HashSet<String>,
@@ -170,6 +255,9 @@ pub(crate) struct InputGuard {
 impl Drop for InputGuard {
     fn drop(&mut self) {
         *observations().lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *rollout_snapshots()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 
@@ -182,7 +270,7 @@ impl InputGuard {
     ) -> Result<Self> {
         let rollouts = selected_rollouts(scope)
             .into_iter()
-            .map(|path| Ok((path.clone(), digest(&path)?)))
+            .map(|path| Ok((path.clone(), capture_snapshot(&path)?)))
             .collect::<Result<_>>()?;
         let guard = Self {
             rollouts,
@@ -192,7 +280,27 @@ impl InputGuard {
             project: target_project(state, args.project_id.as_deref())?,
             independent_row: target_sqlite_row(args)?,
         };
+        let logical = scope
+            .selected_ids
+            .iter()
+            .filter_map(|id| {
+                scope
+                    .rollout_groups
+                    .get(id)
+                    .map(|paths| (id.clone(), paths.clone()))
+            })
+            .collect();
+        *rollout_snapshots()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(SnapshotRoster {
+            physical: guard.rollouts.clone(),
+            logical,
+        });
         active_attachment_root(&args.attachment_root);
+        eprintln!(
+            "INFO: 已固定 {} 份 Session 的讀取邊界；正常追加會留待下次匯出。",
+            guard.rollouts.len()
+        );
         Ok(guard)
     }
 
@@ -209,13 +317,23 @@ impl InputGuard {
         if self.project != target_project(&state, args.project_id.as_deref())? {
             bail!("匯出目標專案的登記根目錄或身分已變更；尚未覆寫 Handoff");
         }
-        if self.independent_row != target_sqlite_row(args)? {
-            bail!("本次獨立對話的 SQLite Thread 紀錄已變更；尚未覆寫 Handoff");
+        // Changing only the SQLite title is normal while a thread is active;
+        // the export already uses the title captured at selection time.
+        let current_row = target_sqlite_row(args)?;
+        match (&self.independent_row, &current_row) {
+            (None, None) => {}
+            (Some(before), Some(after))
+                if before.archived == after.archived
+                    && before.rollout_path == after.rollout_path => {}
+            _ => bail!("本次獨立對話的 SQLite 身分或封存狀態已變更；尚未覆寫 Handoff"),
         }
 
-        // Re-scan the complete directory to catch a newly created target
-        // session. Only the chosen project's files are hashed again.
-        let files = crate::discover_rollouts(&args.sessions_root)?;
+        // Resolve membership using ONLY the frozen physical-file roster.
+        // A new root, child or history_base continuation born later must not
+        // be mixed into this output or invalidate the captured snapshot.
+        // Rechecking these original files with the CURRENT project registry
+        // still rejects reassignments and contradictory parent identities.
+        let files: Vec<PathBuf> = self.rollouts.keys().cloned().collect();
         let updated = if let Some(id) = args.thread_id.as_deref() {
             project_membership::resolve_independent(&files, &state, id)?
         } else {
@@ -227,29 +345,65 @@ impl InputGuard {
             )?
         };
         if self.root_ids != updated.root_ids || self.selected_ids != updated.selected_ids {
-            bail!(
-                "匯出期間本次目標的主對話或子代理清單改變（原主對話 {} 筆，現 {} 筆）；尚未覆寫 Handoff，請重新匯出",
-                self.root_ids.len(),
-                updated.root_ids.len()
-            );
+            bail!("本次快照內的主對話或子代理歸屬已變更；尚未覆寫 Handoff");
         }
         let paths = selected_rollouts(&updated);
         if paths.len() != self.rollouts.len()
             || paths.iter().any(|path| !self.rollouts.contains_key(path))
         {
-            bail!("匯出期間本次目標的實體 Rollout 清單改變；尚未覆寫 Handoff，請重新匯出");
+            bail!("本次快照內的實體 Rollout 歸屬已變更；尚未覆寫 Handoff");
         }
+
+        let mut appended_files = 0usize;
+        let mut appended_bytes = 0u64;
         for path in paths {
-            if self.rollouts.get(&path) != Some(&digest(&path)?) {
+            let captured = self.rollouts.get(&path).expect("captured path");
+            let current_len = crate::open_shared_read(&path)?
+                .metadata()
+                .with_context(|| format!("再次讀取 Session {}", path.display()))?
+                .len();
+            if current_len < captured.len {
                 bail!(
-                    "匯出期間本次目標的 Session 內容變更：{}；尚未覆寫 Handoff",
+                    "匯出期間 Session 被截斷：{}；尚未覆寫 Handoff",
                     path.display()
                 );
             }
+            // A compressed file may have new frames/rewritten dictionary data;
+            // only plain JSONL is supported as a live append-only source.
+            if crate::rollout_codec::is_compressed_rollout(&path) && current_len != captured.len {
+                bail!(
+                    "匯出期間壓縮 Session 已變更：{}；尚未覆寫 Handoff",
+                    path.display()
+                );
+            }
+            if digest_prefix(&path, captured.len)? != captured.digest {
+                bail!(
+                    "匯出期間 Session 已有內容遭改寫：{}；尚未覆寫 Handoff",
+                    path.display()
+                );
+            }
+            if current_len > captured.len {
+                appended_files += 1;
+                appended_bytes = appended_bytes.saturating_add(current_len - captured.len);
+            }
         }
-        let titles = crate::read_title_index(&args.session_index)?;
-        if self.titles != selected_titles(&updated, &titles) {
-            bail!("匯出期間本次目標的對話標題索引變更；尚未覆寫 Handoff");
+        // Display titles may be updated or temporarily unavailable while
+        // Codex writes the index. The Handoff uses the captured title, so a
+        // rename (or a transient unreadable index) is not source corruption.
+        match crate::read_title_index(&args.session_index) {
+            Ok(titles) if self.titles != selected_titles(&updated, &titles) => {
+                eprintln!("INFO: 匯出期間部分對話標題更新；本次保留開始時的標題。");
+            }
+            Err(_) => {
+                eprintln!("INFO: 標題索引正在更新；本次保留開始時已讀取的標題。");
+            }
+            _ => {}
+        }
+        if appended_files > 0 {
+            eprintln!(
+                "INFO: {} 份 Session 在匯出期間追加共 {} bytes；本次使用已固定的原始前綴，新內容留待下次匯出。",
+                appended_files, appended_bytes
+            );
         }
         finish_attachment_checks()?;
         Ok(())
@@ -370,10 +524,8 @@ mod tests {
     fn relevant_changes_are_rejected_without_writing() {
         let _serial = TEST_LOCK.lock().unwrap();
         for kind in [
-            "rollout",
-            "new-root",
-            "new-continuation",
-            "title",
+            "rewrite",
+            "truncate",
             "assignment",
             "project-root",
             "attachment",
@@ -382,30 +534,12 @@ mod tests {
             let (_d, args, files) = fixture();
             let guard = start(&args, &files);
             match kind {
-                "rollout" => fs::write(
+                "rewrite" => fs::write(
                     &files[0],
-                    format!(
-                        "{}{}",
-                        meta("root-target", "D:\\target"),
-                        "{\"type\":\"event_msg\",\"payload\":{}}\n"
-                    ),
+                    meta("root-target", "D:\\target").replace("2026-10-25", "2025-10-25"),
                 )
                 .unwrap(),
-                "new-root" => fs::write(
-                    args.sessions_root.join("rollout-new-target.jsonl"),
-                    meta("new-target", "D:\\target"),
-                )
-                .unwrap(),
-                "new-continuation" => fs::write(
-                    args.sessions_root.join("rollout-second-root-target.jsonl"),
-                    meta("root-target", "D:\\target"),
-                )
-                .unwrap(),
-                "title" => fs::write(
-                    &args.session_index,
-                    b"{\"id\":\"root-target\",\"thread_name\":\"Updated\"}\n",
-                )
-                .unwrap(),
+                "truncate" => fs::write(&files[0], b"x").unwrap(),
                 "assignment" => {
                     let path = crate::project_state_path(&args);
                     let mut value = project_membership::read_stable_state(&path).unwrap();
@@ -433,6 +567,156 @@ mod tests {
             assert!(guard.verify(&args).is_err(), "{kind}");
         }
     }
+    #[test]
+    fn append_only_rollout_is_bounded_and_does_not_fail() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, files) = fixture();
+        let initial = fs::read(&files[0]).unwrap();
+        let guard = start(&args, &files);
+        let snapshot = session_snapshot_metadata("root-target").unwrap();
+        assert_eq!(
+            snapshot["physical_files"][0]["captured_bytes"],
+            serde_json::json!(initial.len())
+        );
+        assert_eq!(
+            snapshot["later_appends_and_new_files"],
+            "excluded_until_next_export"
+        );
+        use std::io::Write;
+        let mut file = fs::OpenOptions::new().append(true).open(&files[0]).unwrap();
+        file.write_all(b"{\"type\":\"event_msg\",\"payload\":{}}\n")
+            .unwrap();
+        file.flush().unwrap();
+        // Both ingestion paths must use the same captured bytes, not the live tail.
+        assert_eq!(
+            crate::rollout_codec::read_rollout_snapshot(&files[0]).unwrap(),
+            initial
+        );
+        assert_eq!(crate::read_rollout_jsonl(&files[0]).unwrap().len(), 1);
+        assert_eq!(
+            crate::read_rollout_jsonl_legacy(&files[0]).unwrap().len(),
+            1
+        );
+        guard.verify(&args).unwrap();
+        assert_eq!(fs::read(&files[0]).unwrap().len(), initial.len() + 34);
+    }
+
+    #[test]
+    fn append_to_partial_final_line_does_not_invent_complete_record() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, files) = fixture();
+        use std::io::Write;
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&files[0])
+            .unwrap()
+            .write_all(b"{\"type\":")
+            .unwrap();
+        let guard = start(&args, &files);
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&files[0])
+            .unwrap()
+            .write_all(b"\"event_msg\",\"payload\":{}}\n")
+            .unwrap();
+        // The incomplete line at the cutoff is skipped, not completed using
+        // bytes written by Codex after this snapshot was captured.
+        assert_eq!(crate::read_rollout_jsonl(&files[0]).unwrap().len(), 1);
+        assert_eq!(
+            crate::read_rollout_jsonl_legacy(&files[0]).unwrap().len(),
+            1
+        );
+        guard.verify(&args).unwrap();
+    }
+
+    #[test]
+    fn newly_created_roots_and_continuations_are_left_for_next_export() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, files) = fixture();
+        let guard = start(&args, &files);
+        fs::write(
+            args.sessions_root.join("rollout-new-target.jsonl"),
+            meta("new-target", "D:\\target"),
+        )
+        .unwrap();
+        fs::write(
+            args.sessions_root.join("rollout-next-root-target.jsonl"),
+            meta("root-target", "D:\\target"),
+        )
+        .unwrap();
+        guard.verify(&args).unwrap();
+    }
+
+    #[test]
+    fn modifying_already_captured_prefix_is_detected_during_read() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, files) = fixture();
+        let guard = start(&args, &files);
+        let altered = meta("root-target", "D:\\target").replace("2026-10-25", "2025-10-25");
+        fs::write(&files[0], altered).unwrap();
+        assert!(crate::rollout_codec::read_rollout_snapshot(&files[0]).is_err());
+        assert!(guard.verify(&args).is_err());
+    }
+
+    #[test]
+    fn compressed_rollout_is_not_treated_as_plain_append_only_jsonl() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, mut files) = fixture();
+        let zst = args.sessions_root.join("rollout-root-target.jsonl.zst");
+        let compressed =
+            zstd::stream::encode_all(meta("root-target", "D:\\target").as_bytes(), 1).unwrap();
+        fs::write(&zst, &compressed).unwrap();
+        fs::remove_file(&files[0]).unwrap();
+        files[0] = zst.clone();
+        let guard = start(&args, &files);
+        assert_eq!(
+            crate::rollout_codec::read_rollout_snapshot(&zst).unwrap(),
+            meta("root-target", "D:\\target").into_bytes()
+        );
+        use std::io::Write;
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&zst)
+            .unwrap()
+            .write_all(&compressed)
+            .unwrap();
+        assert!(guard.verify(&args).is_err());
+    }
+
+    #[test]
+    fn incomplete_new_session_header_is_deferred_not_a_project_error() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, mut files) = fixture();
+        let new_file = args.sessions_root.join("rollout-writing.jsonl");
+        fs::write(&new_file, b"{\"type\":\"session_meta\",\"payload\":").unwrap();
+        files.push(new_file.clone());
+        let state =
+            project_membership::read_stable_state(&crate::project_state_path(&args)).unwrap();
+        let scope =
+            project_membership::resolve_state(&files, &state, "", args.project_id.as_deref())
+                .unwrap();
+        assert_eq!(selected_rollouts(&scope), vec![files[0].clone()]);
+        // A truncated *complete* line is still a real error, not a transient.
+        fs::write(&new_file, b"{not-json}\n").unwrap();
+        assert!(
+            project_membership::resolve_state(&files, &state, "", args.project_id.as_deref(),)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_live_title_change_does_not_change_the_captured_handoff_title() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, files) = fixture();
+        let guard = start(&args, &files);
+        fs::write(
+            &args.session_index,
+            b"{\"id\":\"root-target\",\"thread_name\":\"New Title\"}\n",
+        )
+        .unwrap();
+        guard.verify(&args).unwrap();
+    }
+
     #[test]
     fn only_referenced_attachment_paths_are_guarded() {
         let _serial = TEST_LOCK.lock().unwrap();

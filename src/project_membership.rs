@@ -3,8 +3,8 @@
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
+use std::fs;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -67,7 +67,11 @@ pub(crate) fn read_stable_state(path: &Path) -> Result<Value> {
 // metadata or a later envelope override it. Legacy records without metadata
 // retain the existing behavior (not selected).
 pub(crate) fn read_first_meta(path: &Path) -> Result<Option<Meta>> {
-    if fs::metadata(path)?.len() == 0 {
+    // During a product export, identify this rollout from the same captured
+    // bytes that its contents and continuation logic use. An appended tail
+    // must not retroactively change the metadata of the selected snapshot.
+    let byte_limit = crate::source_guard::snapshot_for(path).map(|s| s.len);
+    if byte_limit.unwrap_or(fs::metadata(path)?.len()) == 0 {
         if crate::rollout_codec::is_compressed_rollout(path) {
             bail!(
                 "Zero-byte compressed rollout is invalid: {}",
@@ -82,8 +86,14 @@ pub(crate) fn read_first_meta(path: &Path) -> Result<Option<Meta>> {
             std::io::Cursor::new(crate::rollout_codec::read_rollout_snapshot(path)?),
         ))
     } else {
-        let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-        Box::new(BufReader::with_capacity(16 * 1024, file))
+        let file =
+            crate::open_shared_read(path).with_context(|| format!("open {}", path.display()))?;
+        let reader: Box<dyn std::io::Read> = if let Some(len) = byte_limit {
+            Box::new(file.take(len))
+        } else {
+            Box::new(file)
+        };
+        Box::new(BufReader::with_capacity(16 * 1024, reader))
     };
     let mut line = Vec::new();
     for _ in 0..64 {
@@ -101,6 +111,21 @@ pub(crate) fn read_first_meta(path: &Path) -> Result<Option<Meta>> {
         // Their historical treatment is preserved; do not invent an identity.
         let record: Value = match serde_json::from_slice(&line) {
             Ok(value) => value,
+            // Codex creates a new rollout before the first line is finished.
+            // A partial, unterminated header has no reliable identity yet;
+            // defer only that file until the next export. A complete malformed
+            // JSONL line (or compressed source) remains an error.
+            Err(_error)
+                if !line.ends_with(b"\n")
+                    && !crate::rollout_codec::is_compressed_rollout(path)
+                    && byte_limit.is_none() =>
+            {
+                eprintln!(
+                    "INFO: 暫時略過尚未寫完 Session 檔頭的檔案：{}",
+                    path.display()
+                );
+                return Ok(None);
+            }
             Err(error) => bail!("Invalid initial JSONL in {}: {error}", path.display()),
         };
         // Pre-JSONL historical records have no top-level event type; these are

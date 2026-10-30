@@ -39,6 +39,30 @@ enum ConfirmResult {
     Quit,
 }
 
+// Machine receipts deliberately contain only ASCII JSON characters. Windows
+// PowerShell 5.1 may otherwise decode UTF-8 native stdout using the legacy
+// console code page and corrupt CJK error strings before ConvertFrom-Json.
+// The escaped JSON round-trips to the original Unicode; user-facing UI remains
+// unchanged, and the receipt stays one parseable line in any ASCII-compatible
+// native capture path.
+fn machine_receipt_ascii(value: &serde_json::Value) -> String {
+    use std::fmt::Write as _;
+
+    let json = value.to_string();
+    let mut ascii = String::with_capacity(json.len());
+    for character in json.chars() {
+        if character.is_ascii() {
+            ascii.push(character);
+        } else {
+            let mut units = [0u16; 2];
+            for unit in character.encode_utf16(&mut units) {
+                write!(&mut ascii, "\\u{:04x}", *unit).expect("writing to a String cannot fail");
+            }
+        }
+    }
+    ascii
+}
+
 pub(crate) fn start(options: ProductOptions) -> i32 {
     let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     if !options.yes && !interactive {
@@ -70,7 +94,9 @@ pub(crate) fn start(options: ProductOptions) -> i32 {
             if options.yes {
                 std::println!(
                     "V2_RESULT {}",
-                    serde_json::json!({"status":"FAIL","version":crate::VERSION,"error":format!("{error:#}"),"completed_writes":crate::progress::written()})
+                    machine_receipt_ascii(
+                        &serde_json::json!({"status":"FAIL","version":crate::VERSION,"error":format!("{error:#}"),"completed_writes":crate::progress::written()})
+                    )
                 );
             }
             if visual {
@@ -404,6 +430,16 @@ fn execute(
     screen.line(&format!("整合子代理  {}", metrics.integrated_subagents));
     screen.line(&format!("整合續接    {}", metrics.continuations_merged));
     screen.line("掃描／匯出錯誤  0 / 0");
+    if metrics.schema_unknown_occurrences > 0 || metrics.schema_limited_observations > 0 {
+        screen.tint(
+            &format!(
+                "資料提醒：未辨識 {} 筆；有界保存／省略 {} 筆。請查看 Handoff 的 schema_coverage。",
+                metrics.schema_unknown_occurrences, metrics.schema_limited_observations
+            ),
+            93,
+        );
+    }
+    screen.line("匯出成功不代表所有原始欄位皆已完整收錄。");
     screen.line(&format!("處理時間    {elapsed:.3} 秒"));
     screen.line("儲存位置");
     screen.tint(&args.output_directory.to_string_lossy(), 96);
@@ -433,10 +469,10 @@ fn execute(
     if yes {
         std::println!(
             "V2_RESULT {}",
-            serde_json::json!({
+            machine_receipt_ascii(&serde_json::json!({
                 "status":"PASS","version":crate::VERSION,"kind":if target.kind==Kind::Project{"project"}else{"independent-thread"},
                 "target_id":target.id,"output_directory":args.output_directory,"elapsed_seconds":elapsed,"metrics":metrics
-            })
+            }))
         );
     }
     Ok(())
@@ -445,6 +481,31 @@ fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn machine_receipt_remains_ascii_json_and_roundtrips_multilingual_errors() {
+        for receipt in [
+            serde_json::json!({
+                "status": "FAIL",
+                "error": "拒絕多個 Handoff\n包含 \\\"引號\\\"、反斜線 \\\\ 與 😀",
+                "completed_writes": 0,
+            }),
+            serde_json::json!({
+                "status": "PASS",
+                "output_directory": "C:\\使用者\\測試資料",
+                "metrics": {"outputs_rewritten": 1},
+            }),
+        ] {
+            let machine_line = machine_receipt_ascii(&receipt);
+            assert!(machine_line.is_ascii());
+            assert!(!machine_line.contains('\n'));
+            assert!(machine_line.contains("\\u"));
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&machine_line).unwrap(),
+                receipt
+            );
+        }
+    }
     #[test]
     fn picker_cancel_stops_automatic_reopen() {
         let mut s = Confirmation::new(None);

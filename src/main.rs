@@ -17,6 +17,7 @@ mod destination;
 mod platform;
 mod product;
 mod progress;
+mod schema;
 mod sidebar_targets;
 mod source_guard;
 mod sqlite_threads;
@@ -58,7 +59,7 @@ use walkdir::WalkDir;
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
-use std::os::windows::fs::OpenOptionsExt;
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 #[cfg(windows)]
 use windows_sys::Win32::UI::Shell::{
     SHCNE_UPDATEDIR, SHCNF_FLUSHNOWAIT, SHCNF_PATHW, SHChangeNotify,
@@ -2326,10 +2327,12 @@ fn parse_rollout_line(line: &[u8], state: &mut RolloutIngestionState) -> Result<
 
 fn source_data_quality_from_path(path: &Path) -> Result<SourceDataQuality> {
     let file = open_shared_read(path)?;
-    let stored_len = file
-        .metadata()
-        .with_context(|| format!("unable to inspect {}", path.display()))?
-        .len();
+    let stored_len = source_guard::snapshot_for(path).map_or(
+        file.metadata()
+            .with_context(|| format!("unable to inspect {}", path.display()))?
+            .len(),
+        |snapshot| snapshot.len,
+    );
     let (mut reader, snapshot_len): (Box<dyn BufRead>, u64) =
         if rollout_codec::is_compressed_rollout(path) {
             let bytes = rollout_codec::read_rollout_snapshot(path)?;
@@ -2407,10 +2410,12 @@ fn source_data_quality_from_path(path: &Path) -> Result<SourceDataQuality> {
 
 fn read_rollout_jsonl_legacy(path: &Path) -> Result<Records> {
     let file = open_shared_read(path)?;
-    let stored_len = file
-        .metadata()
-        .with_context(|| format!("unable to inspect {}", path.display()))?
-        .len();
+    let stored_len = source_guard::snapshot_for(path).map_or(
+        file.metadata()
+            .with_context(|| format!("unable to inspect {}", path.display()))?
+            .len(),
+        |snapshot| snapshot.len,
+    );
     let (mut reader, snapshot_len): (Box<dyn BufRead>, u64) =
         if rollout_codec::is_compressed_rollout(path) {
             let bytes = rollout_codec::read_rollout_snapshot(path)?;
@@ -2445,8 +2450,13 @@ fn read_rollout_jsonl_legacy(path: &Path) -> Result<Records> {
             continue;
         }
         let is_final_physical_line = bytes_read >= snapshot_len;
-        match parse_rollout_line(&buffer, &mut state) {
-            Ok(Some(record)) => records.push((line_number, record)),
+        match parse_rollout_line(&buffer, &mut state)
+            .and_then(|record| schema::annotate(&buffer, record))
+        {
+            Ok(Some(mut record)) => {
+                schema::set_line(&mut record, line_number);
+                records.push((line_number, record));
+            }
             Ok(None) => {}
             Err(_) if is_final_physical_line && !rollout_codec::is_compressed_rollout(path) => {
                 eprintln!(
@@ -2486,8 +2496,13 @@ fn read_rollout_jsonl(path: &Path) -> Result<Records> {
             continue;
         }
         let is_final_physical_line = consumed >= bytes.len();
-        match parse_rollout_line_prefix(line, &mut state) {
-            Ok(Some(record)) => records.push((line_number, record)),
+        match parse_rollout_line_prefix(line, &mut state)
+            .and_then(|record| schema::annotate(line, record))
+        {
+            Ok(Some(mut record)) => {
+                schema::set_line(&mut record, line_number);
+                records.push((line_number, record));
+            }
             Ok(None) => {}
             Err(_) if is_final_physical_line && !rollout_codec::is_compressed_rollout(path) => {
                 eprintln!(
@@ -2797,6 +2812,7 @@ struct Session {
     activities: Vec<Value>,
     execution_profile: Option<Value>,
     data_quality: Option<Value>,
+    schema_info: Option<Value>,
     source_path: PathBuf,
     subagent_sessions: Vec<Session>,
     internal_session_ids: Vec<String>,
@@ -7081,6 +7097,43 @@ fn attachment_metadata(
     output
 }
 
+// Do not follow an attachment-id directory or file reparse point into an
+// unrelated location. The attachment root is the already-selected Codex root;
+// each child must be an ordinary directory/file before it can be consulted.
+fn attachment_path_is_safe(path: &Path, attachment_root: &Path) -> bool {
+    let parts = if attachment_root.as_os_str().is_empty() {
+        vec![path.to_path_buf()]
+    } else {
+        vec![
+            attachment_root.to_path_buf(),
+            path.parent().unwrap_or(attachment_root).to_path_buf(),
+            path.to_path_buf(),
+        ]
+    };
+    for (index, part) in parts.iter().enumerate() {
+        let Ok(meta) = fs::symlink_metadata(part) else {
+            // Missing/unreadable is reported by the caller without following
+            // any unknown child into an unrelated directory.
+            return false;
+        };
+        #[cfg(windows)]
+        if meta.file_attributes() & 0x400 != 0 {
+            return false;
+        }
+        if meta.file_type().is_symlink() {
+            return false;
+        }
+        if index + 1 == parts.len() {
+            if !meta.is_file() {
+                return false;
+            }
+        } else if !meta.is_dir() {
+            return false;
+        }
+    }
+    true
+}
+
 fn read_attachment_from_disk(
     reference: &AttachmentReference,
     attachment_root: &Path,
@@ -7092,22 +7145,31 @@ fn read_attachment_from_disk(
             .join(&reference.attachment_id)
             .join(&reference.filename)
     };
-    // Observe only this selected Rollout's disk fallback dependencies. A
-    // different project's newly written attachment must not block export.
-    source_guard::record_attachment_path(&path);
-    if !path.is_file() {
-        return (None, "missing".to_string());
+    // Check only the selected reference, never scan the whole attachment tree.
+    // Source_guard detects a relevant file appearing, disappearing, or changing
+    // while the current export is being prepared.
+    match fs::symlink_metadata(&path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Even absence is a selected input: appearance before the final
+            // source consistency fence must reject the export.
+            source_guard::record_attachment_path(&path);
+            return (None, "missing".to_string());
+        }
+        Err(_) => return (None, "unreadable".to_string()),
     }
+    if !attachment_path_is_safe(&path, attachment_root) {
+        return (None, "unsafe_path".to_string());
+    }
+    // Never checksum/open a child symlink before the safety check above.
+    source_guard::record_attachment_path(&path);
     let Ok(data) = read_shared_bytes(&path) else {
         return (None, "unreadable".to_string());
     };
     match String::from_utf8(data) {
-        Ok(mut text) => {
-            if text.starts_with('\u{feff}') {
-                text.remove(0);
-            }
-            (Some(text), "restored".to_string())
-        }
+        // Keep a UTF-8 BOM as a real character when present: removing it
+        // would invalidate the claimed byte-for-byte original SHA-256.
+        Ok(text) => (Some(text), "restored".to_string()),
         Err(_) => (None, "decode_error".to_string()),
     }
 }
@@ -7274,39 +7336,104 @@ fn attachment_entry_from_values(
             unique_values.push(value);
         }
     }
-    if unique_values.len() == 1 {
-        let content = unique_values.pop().expect("one attachment candidate");
-        return AttachmentEntry {
-            content: Some(content.clone()),
-            metadata: attachment_metadata(
-                reference,
-                Some(&content),
-                "rollout_tool_output",
-                "restored",
-            ),
+
+    // A successful Get-Content exit code is evidence of an observed tool
+    // result, NOT proof that the stdout is exactly the attachment file.
+    // In particular, PowerShell can print a startup error before the real
+    // attachment bytes while still producing a successful tool envelope.
+    let (file_content, file_status) = read_attachment_from_disk(reference, attachment_root);
+    let candidate_count = unique_values.len();
+    let (content, source, status, comparison) = if let Some(original) = file_content {
+        let comparison = if unique_values.is_empty() {
+            "no_tool_candidate"
+        } else if unique_values.len() == 1 && unique_values[0] == original {
+            "exact_match"
+        } else if unique_values.iter().any(|candidate| candidate == &original) {
+            "some_candidates_match"
+        } else {
+            "mismatch"
         };
-    }
-    if unique_values.len() > 1 {
-        return AttachmentEntry {
-            content: None,
-            metadata: attachment_metadata(
-                reference,
-                None,
-                "rollout_tool_output",
-                "content_conflict",
-            ),
-        };
-    }
-    let (content, status) = read_attachment_from_disk(reference, attachment_root);
-    let source = if content.is_some() {
-        "attachment_file"
+        (Some(original), "attachment_file", "restored", comparison)
     } else {
-        "attachment_reference"
+        let status = if file_status != "missing" {
+            file_status.as_str()
+        } else if candidate_count > 1 {
+            "content_conflict"
+        } else if candidate_count == 1 {
+            "tool_output_unverified"
+        } else {
+            "missing"
+        };
+        // Do not substitute unverified tool output for the user's objective.
+        // The original tool record remains in the selected rollout; preserve
+        // candidate fingerprints below without falsely claiming restoration.
+        (None, "attachment_reference", status, "original_unavailable")
     };
-    AttachmentEntry {
-        metadata: attachment_metadata(reference, content.as_deref(), source, &status),
-        content,
+    let mut metadata = attachment_metadata(reference, content.as_deref(), source, status);
+    metadata.insert(
+        "verification_method".to_string(),
+        Value::String(
+            if content.is_some() {
+                "attachment_file_bytes"
+            } else {
+                "none"
+            }
+            .to_string(),
+        ),
+    );
+    metadata.insert(
+        "attachment_file_status".to_string(),
+        Value::String(file_status),
+    );
+    metadata.insert(
+        "tool_output_comparison".to_string(),
+        Value::String(comparison.to_string()),
+    );
+    metadata.insert(
+        "tool_candidate_count".to_string(),
+        Value::Number((candidate_count as u64).into()),
+    );
+    if candidate_count > 0 {
+        let mut hashes: Vec<String> = unique_values
+            .iter()
+            .map(|candidate| sha256_text(Some(candidate)))
+            .collect();
+        hashes.sort();
+        metadata.insert(
+            "tool_candidate_sha256".to_string(),
+            Value::Array(hashes.iter().take(16).cloned().map(Value::String).collect()),
+        );
+        if hashes.len() > 16 {
+            metadata.insert(
+                "additional_tool_candidate_count".to_string(),
+                Value::Number(((hashes.len() - 16) as u64).into()),
+            );
+        }
+        if content.is_none() {
+            // Keep a bounded, explicitly unverified evidence copy separate
+            // from the user message. A reader must never mistake it for the
+            // original attachment bytes. The full candidate stays in the
+            // source Rollout and is identified by the hash above.
+            let previews: Vec<Value> = unique_values
+                .iter()
+                .take(2)
+                .map(|candidate| {
+                    let excerpt: String = candidate.chars().take(4096).collect();
+                    Value::Object(obj!(
+                        "preview" => Value::String(excerpt),
+                        "sha256" => Value::String(sha256_text(Some(candidate))),
+                        "byte_length" => Value::Number((candidate.len() as u64).into()),
+                        "preview_truncated" => Value::Bool(candidate.chars().count() > 4096)
+                    ))
+                })
+                .collect();
+            metadata.insert(
+                "unverified_tool_evidence".to_string(),
+                Value::Array(previews),
+            );
+        }
     }
+    AttachmentEntry { content, metadata }
 }
 
 fn collect_attachment_contents(records: &Records, attachment_root: &Path) -> AttachmentRegistry {
@@ -7706,7 +7833,23 @@ fn clean_dynamic_command_value(value: &Value) -> Value {
         Value::Object(map) => {
             let mut output = Obj::new();
             for (key, item) in map {
-                output.insert(key.clone(), clean_dynamic_command_value(item));
+                let opaque = matches!(
+                    key.as_str(),
+                    "structured_result"
+                        | "result_envelope"
+                        | "input_summary"
+                        | "error_detail"
+                        | "action_parameters"
+                        | "nontext_result_descriptions"
+                );
+                output.insert(
+                    key.clone(),
+                    if opaque {
+                        item.clone()
+                    } else {
+                        clean_dynamic_command_value(item)
+                    },
+                );
             }
             let template = value_str(output.get("command_template"));
             let source_kind = value_str(output.get("source_kind"));
@@ -8009,8 +8152,13 @@ where
         let record = {
             #[cfg(feature = "integrated-study")]
             let _study_scope = integrated_study::scope(study_family, line.len());
-            match parse_rollout_line_prefix(line, &mut ingestion) {
-                Ok(Some(record)) => record,
+            match parse_rollout_line_prefix(line, &mut ingestion)
+                .and_then(|record| schema::annotate(line, record))
+            {
+                Ok(Some(mut record)) => {
+                    schema::set_line(&mut record, line_number);
+                    record
+                }
                 Ok(None) => continue,
                 Err(_) if is_final_physical_line && !rollout_codec::is_compressed_rollout(path) => {
                     eprintln!(
@@ -9030,104 +9178,7 @@ fn tool_binary_data_regex() -> &'static Regex {
 }
 
 fn compact_tool_arguments(value: &Value) -> Value {
-    fn visit(
-        value: &Value,
-        depth: usize,
-        remaining: &mut usize,
-        nodes: &mut usize,
-        truncated: &mut bool,
-        omitted_binary: &mut bool,
-    ) -> Value {
-        if depth > 6 || *nodes == 0 || *remaining == 0 {
-            *truncated = true;
-            return Value::String("[omitted]".to_string());
-        }
-        *nodes -= 1;
-        match value {
-            Value::String(text) => {
-                let cleaned = tool_binary_data_regex().replace_all(text, "[binary omitted]");
-                *omitted_binary |= cleaned.as_ref() != text;
-                let take = (*remaining).min(512);
-                let result: String = cleaned.chars().take(take).collect();
-                *truncated |= cleaned.chars().count() > take;
-                *remaining -= result.chars().count();
-                Value::String(result)
-            }
-            Value::Object(map) => {
-                let mut result = Obj::new();
-                let mut keys: Vec<&String> = map.keys().collect();
-                keys.sort();
-                for key in keys {
-                    if result.len() >= 32 || *remaining == 0 || *nodes == 0 {
-                        *truncated = true;
-                        break;
-                    }
-                    if matches!(
-                        key.to_ascii_lowercase().as_str(),
-                        "_meta" | "base64" | "screenshot" | "image" | "image_data" | "data"
-                    ) {
-                        *omitted_binary = true;
-                        continue;
-                    }
-                    let key_len = key.chars().count();
-                    if key_len > *remaining {
-                        *truncated = true;
-                        break;
-                    }
-                    *remaining -= key_len;
-                    result.insert(
-                        key.clone(),
-                        visit(
-                            &map[key],
-                            depth + 1,
-                            remaining,
-                            nodes,
-                            truncated,
-                            omitted_binary,
-                        ),
-                    );
-                }
-                Value::Object(result)
-            }
-            Value::Array(values) => {
-                let mut result = Vec::new();
-                for child in values.iter().take(16) {
-                    if *remaining == 0 || *nodes == 0 {
-                        *truncated = true;
-                        break;
-                    }
-                    result.push(visit(
-                        child,
-                        depth + 1,
-                        remaining,
-                        nodes,
-                        truncated,
-                        omitted_binary,
-                    ));
-                }
-                *truncated |= result.len() != values.len();
-                Value::Array(result)
-            }
-            _ => value.clone(),
-        }
-    }
-    let mut remaining = 2048;
-    let mut nodes = 128;
-    let mut truncated = false;
-    let mut omitted_binary = false;
-    let result = visit(
-        value,
-        0,
-        &mut remaining,
-        &mut nodes,
-        &mut truncated,
-        &mut omitted_binary,
-    );
-    Value::Object(obj!(
-        "value" => result,
-        "truncated" => Value::Bool(truncated),
-        "omitted_binary" => Value::Bool(omitted_binary),
-    ))
+    schema::project(value, schema::Limits::ARGUMENTS)
 }
 
 fn typed_web_activity(
@@ -9206,10 +9257,16 @@ fn typed_web_activity(
         );
     }
     activity.insert("action".to_string(), Value::String(action.to_string()));
+    if let Some(action) = item.get("action") {
+        activity.insert(
+            "action_parameters".into(),
+            schema::project(action, schema::Limits::ARGUMENTS),
+        );
+    }
     let counter_name = match action {
         "search" => "search_count",
-        "open" => "open_count",
-        "find" | "find_in_page" => "find_count",
+        "open" | "openPage" | "open_page" => "open_count",
+        "find" | "find_in_page" | "findInPage" => "find_count",
         "click" => "click_count",
         _ => "other_count",
     };
@@ -9296,6 +9353,18 @@ fn typed_tool_activity(
         }
     }
     let result = item.get("result").and_then(Value::as_object);
+    if let Some(value) = result.and_then(|r| r.get("structuredContent")) {
+        activity.insert(
+            "structured_result".into(),
+            schema::project(value, schema::Limits::RESULT),
+        );
+    }
+    if let Some(value) = item.get("error") {
+        activity.insert(
+            "error_detail".into(),
+            schema::project(value, schema::Limits::RESULT),
+        );
+    }
     if let Some(value) = result
         .and_then(|map| map.get("isError"))
         .and_then(Value::as_bool)
@@ -9316,6 +9385,7 @@ fn typed_tool_activity(
     let mut parts = Vec::<String>::new();
     let mut types = Vec::<String>::new();
     let mut omitted = 0usize;
+    let mut nontext = Vec::new();
     if let Some(content) = content.and_then(Value::as_array) {
         for part in content {
             let Some(part) = part.as_object() else {
@@ -9335,6 +9405,10 @@ fn typed_tool_activity(
                     continue;
                 }
             }
+            nontext.push(schema::project(
+                &Value::Object(part.clone()),
+                schema::Limits::ARGUMENTS,
+            ));
             omitted += 1;
         }
     }
@@ -9344,6 +9418,9 @@ fn typed_tool_activity(
             Value::Array(types.into_iter().map(Value::String).collect()),
         );
     }
+    if !nontext.is_empty() {
+        activity.insert("nontext_result_descriptions".into(), Value::Array(nontext));
+    }
     if omitted != 0 {
         activity.insert(
             "omitted_nontext_items".to_string(),
@@ -9352,6 +9429,9 @@ fn typed_tool_activity(
     }
     if !parts.is_empty() {
         let original = parts.join("\n");
+        if let Some(envelope) = schema::tool_envelope(item, &original) {
+            activity.insert("result_envelope".into(), envelope);
+        }
         let cleaned = tool_binary_data_regex().replace_all(&original, "[binary omitted]");
         let mut summary = bounded_text(&cleaned, 4096);
         if cleaned.as_ref() != original {
@@ -9654,14 +9734,34 @@ fn typed_command_execution_output(
             Value::Bool(!stdout.is_empty()),
         );
     }
+    if let Some(text) = raw_str(item.get("aggregated_output")) {
+        execution.insert(
+            "aggregated_output_present".into(),
+            Value::Bool(!text.is_empty()),
+        );
+    }
     if int_value(item.get("exit_code"), None).is_some_and(|code| code != 0)
         || value_str(item.get("status")).is_some_and(|status| {
             matches!(status.to_ascii_lowercase().as_str(), "failed" | "error")
         })
     {
         let mut diagnostics = Obj::new();
-        for name in ["stdout", "stderr"] {
+        for name in ["stdout", "stderr", "aggregated_output"] {
             if let Some(text) = nonblank_raw_str(item.get(name)) {
+                // The combined stream may be an exact copy of stdout/stderr.
+                // Preserve its source identity via an alias without duplicating text.
+                if name == "aggregated_output" {
+                    if let Some(alias) = ["stdout", "stderr"]
+                        .into_iter()
+                        .find(|source| nonblank_raw_str(item.get(*source)) == Some(text))
+                    {
+                        execution.insert(
+                            "diagnostic_aliases".to_string(),
+                            serde_json::json!({"aggregated_output":alias}),
+                        );
+                        continue;
+                    }
+                }
                 diagnostics.insert(name.to_string(), bounded_text(text, 4096));
             }
         }
@@ -10009,6 +10109,7 @@ fn merge_verified_structured_users(
 }
 
 struct EnrichmentAccumulator {
+    schema: schema::Accumulator,
     session_id: String,
     is_subagent: bool,
     create_time: Option<Timestamp>,
@@ -10030,6 +10131,9 @@ struct EnrichmentAccumulator {
     message_start_line: Option<usize>,
     active_task_start_line: Option<usize>,
     delegation_seen: bool,
+    // The task owning the delegation marker must survive a task_complete even
+    // when the agent has not written an assistant message at snapshot time.
+    delegation_task_start_line: Option<usize>,
     latest_local_record_time: Option<Timestamp>,
     prelocal_records: Vec<(usize, Value)>,
     response_user_candidates: HashMap<(String, String), VecDeque<Value>>,
@@ -10051,6 +10155,7 @@ impl EnrichmentAccumulator {
         actor_path: String,
     ) -> Self {
         Self {
+            schema: schema::Accumulator::default(),
             session_id,
             is_subagent,
             create_time,
@@ -10072,6 +10177,7 @@ impl EnrichmentAccumulator {
             message_start_line: None,
             active_task_start_line: None,
             delegation_seen: false,
+            delegation_task_start_line: None,
             latest_local_record_time: None,
             prelocal_records: Vec::new(),
             response_user_candidates: HashMap::new(),
@@ -10151,6 +10257,7 @@ impl EnrichmentAccumulator {
                 let developer_text = get_message_text(payload.get("content")).unwrap_or_default();
                 if developer_text.contains("You are an agent in a team of agents") {
                     self.delegation_seen = true;
+                    self.delegation_task_start_line = self.active_task_start_line;
                     self.prelocal_records.push((line_number, record.clone()));
                     return Ok(());
                 }
@@ -10167,6 +10274,22 @@ impl EnrichmentAccumulator {
             }
         }
         self.prelocal_records.push((line_number, record.clone()));
+        Ok(())
+    }
+
+    // A live subagent can have a single task_started, its delegation marker,
+    // and many real tool/agent events, but no assistant answer or second task
+    // before the per-file source snapshot ends. The legacy reader already
+    // handles that case; keep the production streaming reader equivalent.
+    fn finish_pending_delegation(&mut self) -> Result<()> {
+        if self.is_subagent && self.local_start_line.is_none() && self.delegation_seen {
+            if let Some(start_line) = self.delegation_task_start_line {
+                // There is not yet a local assistant message. Do not export
+                // inherited bootstrap user/developer messages as child speech.
+                self.message_start_line = Some(usize::MAX);
+                self.activate_local_from(start_line, None)?;
+            }
+        }
         Ok(())
     }
 
@@ -10196,6 +10319,10 @@ impl EnrichmentAccumulator {
     }
 
     fn consume_local(&mut self, record: &Value) -> Result<()> {
+        self.schema.observe(record);
+        if record.get("type").and_then(Value::as_str) == Some("handoff_source_observation") {
+            return Ok(());
+        }
         let Some(record_map) = record.as_object() else {
             return Ok(());
         };
@@ -10818,6 +10945,7 @@ fn finalize_streaming_enrichment(
 
     state.resolve_prelocal()?;
     let EnrichmentAccumulator {
+        schema,
         session_id,
         is_subagent,
         create_time,
@@ -10839,6 +10967,7 @@ fn finalize_streaming_enrichment(
         message_start_line: _,
         active_task_start_line: _,
         delegation_seen: _,
+        delegation_task_start_line: _,
         latest_local_record_time: _,
         prelocal_records: _,
         mut response_user_candidates,
@@ -11598,6 +11727,13 @@ fn finalize_streaming_enrichment(
         session.last_message_time = session.last_message_time.max(latest);
     }
 
+    session.schema_info = Some(schema.finish(
+        &session.source_path.to_string_lossy(),
+        &session.messages,
+        &session.activities,
+        &session.turns,
+    ));
+
     Ok(())
 }
 
@@ -11717,7 +11853,8 @@ impl StreamingSessionBuilder {
         Ok(())
     }
 
-    fn finish(self, attachment_root: &Path) -> Result<Session> {
+    fn finish(mut self, attachment_root: &Path) -> Result<Session> {
+        self.enrichment.finish_pending_delegation()?;
         let StreamingSessionBuilder {
             cwd,
             session_id,
@@ -12163,6 +12300,7 @@ impl StreamingSessionBuilder {
             activities: output_activities,
             execution_profile: None,
             data_quality: data_quality.to_value(),
+            schema_info: None,
             source_path: path.to_path_buf(),
             subagent_sessions: Vec::new(),
             internal_session_ids: Vec::new(),
@@ -12235,7 +12373,10 @@ fn convert_codex_session_file_streaming_scoped(
                     target_cwd_normalized,
                     selected_ids,
                 )? {
-                    Some(value) => builder = Some(value),
+                    Some(mut value) => {
+                        value.enrichment.schema.observe(&record);
+                        builder = Some(value);
+                    }
                     None => {
                         rejected = true;
                         return Ok(StreamControl::Stop);
@@ -12294,7 +12435,10 @@ fn convert_codex_session_file_streaming_scoped(
             )?;
             metadata_time = metadata_time.saturating_add(started.elapsed());
             match built {
-                Some(value) => builder = Some(value),
+                Some(mut value) => {
+                    value.enrichment.schema.observe(&record);
+                    builder = Some(value);
+                }
                 None => {
                     rejected = true;
                     return Ok(StreamControl::Stop);
@@ -13705,6 +13849,7 @@ fn convert_codex_session_file_with_ingestion_scoped(
         activities: output_activities,
         execution_profile: None,
         data_quality: source_data_quality_from_path(path)?.to_value(),
+        schema_info: None,
         source_path: path.to_path_buf(),
         subagent_sessions: Vec::new(),
         internal_session_ids: Vec::new(),
@@ -13885,7 +14030,10 @@ fn subagent_local_start_line(records: &Records) -> Option<usize> {
 fn latest_record_time_from_line(records: &Records, start_line: usize) -> Option<Timestamp> {
     records
         .iter()
-        .filter(|(line_number, _)| *line_number >= start_line)
+        .filter(|(line_number, record)| {
+            *line_number >= start_line
+                && record.get("type").and_then(Value::as_str) != Some("handoff_source_observation")
+        })
         .filter_map(|(_, record)| {
             record
                 .as_object()
@@ -13902,6 +14050,7 @@ fn enrich_session_from_records(
     #[cfg(feature = "integrated-study")]
     let _study_scope = integrated_study::scope(35, 0);
 
+    let mut schema = schema::Accumulator::default();
     let session_id = session.session_id.clone();
     let is_subagent = session.thread_source == "subagent";
     let create_time = session.create_time;
@@ -13945,16 +14094,26 @@ fn enrich_session_from_records(
         let Some(record_map) = record.as_object() else {
             continue;
         };
-        let Some(payload) = record_map.get("payload").and_then(Value::as_object) else {
-            continue;
-        };
         let record_type = value_str(record_map.get("type"));
-        let payload_type = value_str(payload.get("type"));
         let record_time = parse_datetime_value(record_map.get("timestamp"));
         let local = !is_subagent
             || local_start_line.is_some_and(|start| *line_number >= start)
             || (local_start_line.is_none() && record_time_is_local(record_map, create_time, true));
 
+        // The compacted ingress record deliberately has no retained payload.
+        // Observe the annotation (which was created from the full source JSONL)
+        // before the legacy reducer's payload guard, just as the fused path does.
+        // Keep the identical child-locality gate; do not import parent context.
+        if local || record_type == Some("session_meta") {
+            schema.observe(record);
+        }
+        if record_type == Some("handoff_source_observation") {
+            continue;
+        }
+        let Some(payload) = record_map.get("payload").and_then(Value::as_object) else {
+            continue;
+        };
+        let payload_type = value_str(payload.get("type"));
         if record_type == Some("event_msg") && payload_type == Some("task_started") && local {
             if let Some(turn_id) = value_str(payload.get("turn_id")) {
                 current_turn_id = Some(turn_id.to_string());
@@ -15289,6 +15448,13 @@ fn enrich_session_from_records(
         session.last_message_time = session.last_message_time.max(latest);
     }
 
+    session.schema_info = Some(schema.finish(
+        &session.source_path.to_string_lossy(),
+        &session.messages,
+        &session.activities,
+        &session.turns,
+    ));
+
     Ok(())
 }
 
@@ -15300,6 +15466,11 @@ fn append_session_payload(output: &mut Obj, session: &Session) {
     #[cfg(feature = "integrated-study")]
     let _study_scope = integrated_study::scope(31, 0);
 
+    if let Some(values) = session.schema_info.as_ref().and_then(Value::as_object) {
+        for (key, value) in values {
+            output.insert(key.clone(), value.clone());
+        }
+    }
     if let Some(value) = session.execution_profile.as_ref() {
         output.insert("execution_profile".to_string(), value.clone());
     }
@@ -15348,6 +15519,9 @@ fn append_session_payload(output: &mut Obj, session: &Session) {
 // final handoff instead of deeply cloning them. Metadata required by export
 // bookkeeping stays in Session, including session IDs and subagent IDs.
 fn append_session_payload_move(output: &mut Obj, session: &mut Session) {
+    if let Some(Value::Object(values)) = session.schema_info.take() {
+        output.extend(values);
+    }
     if let Some(value) = session.execution_profile.take() {
         output.insert("execution_profile".to_string(), value);
     }
@@ -15468,6 +15642,9 @@ fn build_subagent_output(session: &Session) -> Result<Value> {
         Value::String(session.activity_detail.clone()),
     );
     append_session_payload(&mut output, session);
+    if let Some(snapshot) = source_guard::session_snapshot_metadata(&session.session_id) {
+        output.insert("source_snapshot".to_string(), snapshot);
+    }
     Ok(Value::Object(output))
 }
 
@@ -15547,6 +15724,9 @@ fn build_subagent_output_move(session: &mut Session) -> Result<Value> {
         Value::String(session.activity_detail.clone()),
     );
     append_session_payload_move(&mut output, session);
+    if let Some(snapshot) = source_guard::session_snapshot_metadata(&session.session_id) {
+        output.insert("source_snapshot".to_string(), snapshot);
+    }
     Ok(Value::Object(output))
 }
 
@@ -15748,12 +15928,16 @@ fn build_handoff(
         "update_time" => Value::String(utc_iso(session.last_message_time)),
         "conversation_id" => Value::String(session.session_id.clone()),
         "exporter_version" => Value::String(VERSION.to_string()),
+        "handoff_schema_version" => Value::String(schema::VERSION.to_string()),
         "codex" => session.codex.clone(),
         "workspace" => session.workspace.clone(),
         "session_state" => Value::String(session.session_state.clone()),
         "activity_detail" => Value::String(session.activity_detail.clone()),
     );
     append_session_payload(&mut handoff, session);
+    if let Some(snapshot) = source_guard::session_snapshot_metadata(&session.session_id) {
+        handoff.insert("source_snapshot".to_string(), snapshot);
+    }
     if !session.subagent_sessions.is_empty() {
         let mut subagents = Vec::new();
         for child in &session.subagent_sessions {
@@ -15791,12 +15975,16 @@ fn build_handoff_move(
         "update_time" => Value::String(utc_iso(session.last_message_time)),
         "conversation_id" => Value::String(session.session_id.clone()),
         "exporter_version" => Value::String(VERSION.to_string()),
+        "handoff_schema_version" => Value::String(schema::VERSION.to_string()),
         "codex" => std::mem::take(&mut session.codex),
         "workspace" => std::mem::take(&mut session.workspace),
         "session_state" => Value::String(session.session_state.clone()),
         "activity_detail" => Value::String(session.activity_detail.clone()),
     );
     append_session_payload_move(&mut handoff, session);
+    if let Some(snapshot) = source_guard::session_snapshot_metadata(&session.session_id) {
+        handoff.insert("source_snapshot".to_string(), snapshot);
+    }
     if !session.subagent_sessions.is_empty() {
         let mut subagents = Vec::new();
         for child in &mut session.subagent_sessions {
@@ -16957,6 +17145,8 @@ struct RunMetrics {
     root_conversations: usize,
     integrated_subagents: usize,
     scan_errors: usize,
+    schema_unknown_occurrences: u64,
+    schema_limited_observations: u64,
     export_errors: usize,
     outputs_rewritten: usize,
     shell_prewarm_notified: bool,
@@ -17177,13 +17367,27 @@ fn build_all_candidates(
     } else {
         project_membership::rollout_file_groups(&files)?
     };
+    // Product exports must never parse unrelated project files just because
+    // they happened to share a Codex sessions directory. Only the selected,
+    // snapshotted physical roster participates in conversion or continuations.
+    // In particular, a concurrently updated unselected thread cannot block
+    // the selected project's export during its own normal append.
+    let scan_inputs = if args.product_mode {
+        source_guard::selected_rollouts(
+            project_scope
+                .as_ref()
+                .expect("product mode has a selected scope"),
+        )
+    } else {
+        files.clone()
+    };
     let prepared_rollouts = rollout_continuations::prepare(
-        &files,
+        &scan_inputs,
         &groups,
         project_scope.as_ref().map(|scope| &scope.selected_ids),
         project_scope.as_ref().map(|scope| &scope.continuation_ids),
     )?;
-    let physical_rollout_count = files.len();
+    let physical_rollout_count = scan_inputs.len();
     let files = &prepared_rollouts.files;
     if prepared_rollouts.merged_count > 0 {
         println!(
@@ -17462,6 +17666,12 @@ fn build_all_candidates(
             return Err(error);
         }
     }
+    let (schema_unknown_occurrences, schema_limited_observations) = candidates
+        .iter()
+        .map(|(_, handoff)| schema::coverage_counts(handoff))
+        .fold((0_u64, 0_u64), |a, b| {
+            (a.0.saturating_add(b.0), a.1.saturating_add(b.1))
+        });
     let pre_serialized = args
         .pre_serialize_candidates
         .then_some(serialized_candidates.as_slice());
@@ -17644,6 +17854,8 @@ fn build_all_candidates(
             root_conversations,
             integrated_subagents,
             scan_errors,
+            schema_unknown_occurrences,
+            schema_limited_observations,
             export_errors,
             outputs_rewritten,
             shell_prewarm_notified,
@@ -18562,6 +18774,337 @@ mod tests {
         assert!(!message_attachment_transport_is_restorable(&assistant));
     }
 
+    fn test_attachment_reference(id: &str) -> AttachmentReference {
+        let path = format!(r"C:\Users\ExampleUser\.codex\attachments\{id}\goal-objective.md");
+        AttachmentReference {
+            normalized_path: normalize_windows_path(&path),
+            path,
+            attachment_id: id.to_string(),
+            filename: "goal-objective.md".to_string(),
+        }
+    }
+
+    fn write_test_attachment(root: &Path, reference: &AttachmentReference, bytes: &[u8]) {
+        let parent = root.join(&reference.attachment_id);
+        fs::create_dir_all(&parent).unwrap();
+        fs::write(parent.join(&reference.filename), bytes).unwrap();
+    }
+
+    // Standard-library-only scratch directory for attachment regression tests.
+    // Use a fresh child of the OS temp root; never reuse stale test paths.
+    struct AttachmentTestDir(PathBuf);
+
+    impl AttachmentTestDir {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "codex-r6-attachment-test-{}-{}",
+                std::process::id(),
+                TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            ));
+            fs::create_dir(&path).expect("create a new attachment-test-only directory");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for AttachmentTestDir {
+        fn drop(&mut self) {
+            // Never follow a replacement link when cleaning a test directory.
+            let safe = fs::symlink_metadata(&self.0)
+                .map(|m| m.is_dir() && !m.file_type().is_symlink())
+                .unwrap_or(false);
+            if !safe {
+                if !std::thread::panicking() {
+                    panic!(
+                        "attachment test directory missing or replaced: {}",
+                        self.0.display()
+                    );
+                }
+                return;
+            }
+            if let Err(error) = fs::remove_dir_all(&self.0) {
+                if !std::thread::panicking() {
+                    panic!("attachment test directory cleanup failed: {error}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn r5_matching_original_restores_exact_bytes() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000021");
+        let original = "目的
+第二行
+";
+        write_test_attachment(dir.path(), &reference, original.as_bytes());
+        let entry = attachment_entry_from_values(&reference, vec![original.into()], dir.path());
+        assert_eq!(entry.content.as_deref(), Some(original));
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_status")),
+            Some("restored")
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_source")),
+            Some("attachment_file")
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("verification_method")),
+            Some("attachment_file_bytes")
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("tool_output_comparison")),
+            Some("exact_match")
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("sha256")),
+            Some(sha256_text(Some(original)).as_str())
+        );
+    }
+
+    #[test]
+    fn r5_real_powershell_98_byte_prefix_cannot_contaminate_objective() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000022");
+        let original = "# 目標：保存原件\n請確認檔案內容。\n".replace("\\n", "\n");
+        write_test_attachment(dir.path(), &reference, original.as_bytes());
+        // Exact 98-byte failure signature observed in the private 2026-10-29
+        // crosscheck (no private attachment content is embedded in this test).
+        let hex = concat!(
+            "efbfbdefbfbdefbfbdd5a662202746696c6553797374656d2720",
+            "efbfbdefbfbdefbfbdd1aacca457efbfbdefbfbdefbfbdefbfbd20",
+            "496e697469616c697a44656661756c7444726976657320efbfbd40",
+            "efbfbd7eefbfbdefbfbdefbfbdd1a1430d0a"
+        );
+        let prefix: Vec<u8> = hex
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+            .collect();
+        assert_eq!(prefix.len(), 98);
+        let prefix = String::from_utf8(prefix).unwrap();
+        assert_eq!(
+            sha256_text(Some(&prefix)),
+            "ce2abc8da3d601a6614fc114180b3b6791d182e23f1bf2e7c5fcb7e851caf2ad"
+        );
+        let contaminated = format!("{prefix}{original}");
+        let entry =
+            attachment_entry_from_values(&reference, vec![contaminated.clone()], dir.path());
+        assert_eq!(entry.content.as_deref(), Some(original.as_str()));
+        assert_eq!(
+            value_str(entry.metadata.get("sha256")),
+            Some(sha256_text(Some(&original)).as_str())
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("tool_output_comparison")),
+            Some("mismatch")
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_status")),
+            Some("restored")
+        );
+        assert_eq!(
+            entry
+                .metadata
+                .get("tool_candidate_sha256")
+                .and_then(Value::as_array),
+            Some(&vec![Value::String(sha256_text(Some(&contaminated)))])
+        );
+        let mut registry = AttachmentRegistry::new();
+        registry.insert(reference.normalized_path.clone(), entry);
+        let placeholder = format!(
+            "Read the Codex goal file at {} before continuing.",
+            reference.path
+        );
+        let (rendered, metadata, changed) = replace_attachment_transport(&placeholder, &registry);
+        assert!(changed);
+        assert_eq!(rendered, original);
+        assert_eq!(metadata.len(), 1);
+        assert!(!rendered.contains("InitializDefaultDrives"));
+    }
+
+    #[test]
+    fn r5_missing_original_never_claims_tool_output_is_user_objective() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000023");
+        let candidate = "apparently successful stdout";
+        let entry = attachment_entry_from_values(&reference, vec![candidate.into()], dir.path());
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_status")),
+            Some("tool_output_unverified")
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("verification_method")),
+            Some("none")
+        );
+        assert!(!entry.metadata.contains_key("sha256"));
+        assert!(entry.content.is_none());
+        let mut registry = AttachmentRegistry::new();
+        registry.insert(reference.normalized_path.clone(), entry);
+        let placeholder = format!(
+            "Read the Codex goal file at {} before continuing.",
+            reference.path
+        );
+        let (rendered, metadata, changed) = replace_attachment_transport(&placeholder, &registry);
+        assert!(!changed);
+        assert_eq!(rendered, placeholder);
+        assert_eq!(metadata.len(), 1);
+    }
+
+    #[test]
+    fn r5_multiple_tool_candidates_use_exact_original_not_guesswork() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000024");
+        let original = "verified body";
+        write_test_attachment(dir.path(), &reference, original.as_bytes());
+        let entry = attachment_entry_from_values(
+            &reference,
+            vec!["extra error\nverified body".into(), original.into()],
+            dir.path(),
+        );
+        assert_eq!(entry.content.as_deref(), Some(original));
+        assert_eq!(
+            value_str(entry.metadata.get("tool_output_comparison")),
+            Some("some_candidates_match")
+        );
+        assert_eq!(
+            entry
+                .metadata
+                .get("tool_candidate_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_status")),
+            Some("restored")
+        );
+    }
+
+    #[test]
+    fn r5_conflicting_tool_outputs_without_original_do_not_restore() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000025");
+        let entry = attachment_entry_from_values(
+            &reference,
+            vec![
+                "candidate A".into(),
+                "candidate B".into(),
+                "candidate A".into(),
+            ],
+            dir.path(),
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_status")),
+            Some("content_conflict")
+        );
+        assert_eq!(
+            entry
+                .metadata
+                .get("tool_candidate_count")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert!(entry.content.is_none());
+    }
+
+    #[test]
+    fn r5_original_bom_and_final_line_ending_are_byte_exact() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000026");
+        let original = "\u{feff}BOM\r\nlast\r\n";
+        write_test_attachment(dir.path(), &reference, original.as_bytes());
+        let entry =
+            attachment_entry_from_values(&reference, vec!["BOM\r\nlast".into()], dir.path());
+        assert_eq!(entry.content.as_deref(), Some(original));
+        assert_eq!(
+            value_str(entry.metadata.get("sha256")),
+            Some(sha256_text(Some(original)).as_str())
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("tool_output_comparison")),
+            Some("mismatch")
+        );
+    }
+
+    #[test]
+    fn r5_non_utf8_attachment_does_not_turn_tool_text_into_verified_original() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000027");
+        write_test_attachment(dir.path(), &reference, &[0xff, 0xfe, 0x00]);
+        let entry = attachment_entry_from_values(&reference, vec!["text view".into()], dir.path());
+        assert!(entry.content.is_none());
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_status")),
+            Some("decode_error")
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("verification_method")),
+            Some("none")
+        );
+    }
+
+    #[test]
+    fn r5_attachment_readers_keep_same_verified_selection() {
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000028");
+        let original = "exact source bytes";
+        write_test_attachment(dir.path(), &reference, original.as_bytes());
+        let arguments = serde_json::json!({"command":format!("Get-Content -LiteralPath '{}' -Raw", reference.path)}).to_string();
+        let records = vec![
+            (
+                1,
+                serde_json::json!({"type":"response_item","payload":{
+                "type":"function_call","name":"shell_command","call_id":"attach", "arguments":arguments}}),
+            ),
+            (
+                2,
+                serde_json::json!({"type":"response_item","payload":{
+                "type":"function_call_output","call_id":"attach", "output":"Exit code: 0\nOutput:\nERROR: startup\nexact source bytes\r\n"}}),
+            ),
+        ];
+        let collection = collect_attachment_contents(&records, dir.path());
+        let mut streaming = AttachmentCollector::default();
+        for (_, record) in &records {
+            streaming.observe(record);
+        }
+        let streaming = streaming.finish(dir.path());
+        let a = collection.get(&reference.normalized_path).unwrap();
+        let b = streaming.get(&reference.normalized_path).unwrap();
+        assert_eq!(a.content, b.content);
+        assert_eq!(a.metadata, b.metadata);
+        assert_eq!(a.content.as_deref(), Some(original));
+        assert_eq!(
+            value_str(a.metadata.get("tool_output_comparison")),
+            Some("mismatch")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn r5_symlink_attachment_is_not_read_outside_selected_directory() {
+        use std::os::unix::fs::symlink;
+        let dir = AttachmentTestDir::new();
+        let reference = test_attachment_reference("00000000-0000-4000-8000-000000000029");
+        let parent = dir.path().join(&reference.attachment_id);
+        fs::create_dir_all(&parent).unwrap();
+        let foreign = dir.path().join("outside.txt");
+        fs::write(&foreign, b"foreign private content").unwrap();
+        symlink(&foreign, parent.join(&reference.filename)).unwrap();
+        let entry = attachment_entry_from_values(
+            &reference,
+            vec!["foreign private content".into()],
+            dir.path(),
+        );
+        assert_eq!(
+            value_str(entry.metadata.get("restoration_status")),
+            Some("unsafe_path")
+        );
+        assert!(entry.content.is_none());
+    }
+
     #[test]
     fn standalone_attachment_reads_are_accepted_but_composite_commands_are_rejected() {
         let path = r"C:\Users\ExampleUser\.codex\attachments\00000000-0000-4000-8000-000000000001\goal-objective.md";
@@ -18928,6 +19471,202 @@ await tools.exec_command({cmd: `& '${t.path.replace(/'/g,"''")}' -P -`});"#;
                 .and_then(Value::as_array)
                 .map(Vec::len),
             Some(0)
+        );
+    }
+
+    // Reproduces the 2026-10-30 real subagent ordering, with identifying
+    // content replaced by synthetic values. The first task starts before the
+    // delegation developer message; no second task_started is guaranteed.
+    fn write_single_task_subagent_case(
+        include_answer: bool,
+        include_task_complete: bool,
+        include_delegation: bool,
+    ) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "codex-r9-single-task-subagent-{}-{}.jsonl",
+            std::process::id(),
+            TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        ));
+        let mut records = vec![
+            serde_json::json!({
+                "type":"session_meta", "timestamp":"2026-10-30T03:09:57Z",
+                "payload":{
+                    "id":"00000000-0000-7000-8000-000000000901",
+                    "session_id":"00000000-0000-7000-8000-000000000900",
+                    "thread_source":"subagent",
+                    "parent_thread_id":"00000000-0000-7000-8000-000000000900",
+                    "agent_nickname":"SyntheticAgent",
+                    "agent_path":"/root/synthetic_task",
+                    "source":{"subagent":{"thread_spawn":{
+                        "parent_thread_id":"00000000-0000-7000-8000-000000000900",
+                        "depth":1,"agent_path":"/root/synthetic_task"
+                    }}},
+                    "timestamp":"2026-10-30T03:09:57Z",
+                    "cwd":r"D:\workspace", "originator":"Codex Desktop"
+                }
+            }),
+            serde_json::json!({
+                "type":"event_msg", "timestamp":"2026-10-30T03:09:58Z",
+                "payload":{
+                    "type":"task_started",
+                    "turn_id":"00000000-0000-7000-8000-000000000902",
+                    "turn_attribution":{"turn_trigger":"goal"}
+                }
+            }),
+            serde_json::json!({
+                "type":"response_item", "timestamp":"2026-10-30T03:09:59Z",
+                "payload":{
+                    "type":"message", "role":"developer",
+                    "content":[{"type":"input_text", "text":
+                        if include_delegation {
+                            "<multi_agent_role>You are an agent in a team of agents collaborating to complete a task."
+                        } else {
+                            "Unrelated developer instruction"
+                        }
+                    }]
+                }
+            }),
+            serde_json::json!({
+                "type":"response_item", "timestamp":"2026-10-30T03:10:00Z",
+                "payload":{
+                    "type":"message", "role":"user",
+                    "content":[{"type":"input_text", "text":"Synthetic inherited setup; not the child's answer."}]
+                }
+            }),
+            serde_json::json!({
+                "type":"turn_context", "timestamp":"2026-10-30T03:10:01Z",
+                "payload":{
+                    "turn_id":"00000000-0000-7000-8000-000000000902",
+                    "model":"gpt-test", "effort":"high"
+                }
+            }),
+            serde_json::json!({
+                "type":"response_item", "timestamp":"2026-10-30T03:10:02Z",
+                "payload":{
+                    "type":"function_call", "name":"shell_command",
+                    "call_id":"synthetic-call-1",
+                    "arguments":"{\"command\":\"echo synthetic-work\"}"
+                }
+            }),
+            serde_json::json!({
+                "type":"response_item", "timestamp":"2026-10-30T03:10:03Z",
+                "payload":{
+                    "type":"function_call_output", "call_id":"synthetic-call-1",
+                    "output":"Process exited with code 0\nFinal output:\nsynthetic-work\n"
+                }
+            }),
+        ];
+        if include_answer {
+            records.push(serde_json::json!({
+                "type":"response_item", "timestamp":"2026-10-30T03:10:04Z",
+                "payload":{
+                    "type":"message", "role":"assistant", "phase":"final_answer",
+                    "content":[{"type":"output_text", "text":"Synthetic delegated answer."}]
+                }
+            }));
+        }
+        if include_task_complete {
+            records.push(serde_json::json!({
+                "type":"event_msg", "timestamp":"2026-10-30T03:10:05Z",
+                "payload":{
+                    "type":"task_complete",
+                    "turn_id":"00000000-0000-7000-8000-000000000902"
+                }
+            }));
+        }
+        let mut bytes = Vec::new();
+        for record in records {
+            bytes.extend_from_slice(&serde_json::to_vec(&record).unwrap());
+            bytes.push(b'\n');
+        }
+        fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    #[test]
+    fn r9_single_task_live_subagent_without_answer_keeps_activity() {
+        let path = write_single_task_subagent_case(false, false, true);
+        let cwd = normalize_windows_path(r"D:\workspace");
+        let legacy = convert_codex_session_file(&path, &cwd, Path::new("missing-attachments"))
+            .unwrap()
+            .unwrap();
+        let fused =
+            convert_codex_session_file_streaming(&path, &cwd, Path::new("missing-attachments"))
+                .unwrap()
+                .unwrap();
+        let _ = fs::remove_file(&path);
+        assert!(legacy.messages.is_empty());
+        assert!(fused.messages.is_empty());
+        assert!(!legacy.activities.is_empty());
+        assert!(!fused.activities.is_empty());
+        assert_eq!(fused.thread_source, "subagent");
+        assert_eq!(fused.session_state, "active_at_export");
+        assert_eq!(fused.last_message_time, legacy.last_message_time);
+        let titles = HashMap::new();
+        let (_, legacy_handoff) = build_handoff(&legacy, &titles).unwrap();
+        let (_, fused_handoff) = build_handoff(&fused, &titles).unwrap();
+        assert!(json_semantic_equal(&fused_handoff, &legacy_handoff));
+    }
+
+    #[test]
+    fn r9_single_task_subagent_terminal_without_answer_keeps_activity() {
+        let path = write_single_task_subagent_case(false, true, true);
+        let cwd = normalize_windows_path(r"D:\workspace");
+        let legacy = convert_codex_session_file(&path, &cwd, Path::new("missing-attachments"))
+            .unwrap()
+            .unwrap();
+        let fused =
+            convert_codex_session_file_streaming(&path, &cwd, Path::new("missing-attachments"))
+                .unwrap()
+                .unwrap();
+        let _ = fs::remove_file(&path);
+        assert!(fused.messages.is_empty());
+        assert!(!fused.activities.is_empty());
+        assert_eq!(fused.session_state, "idle");
+        let titles = HashMap::new();
+        let (_, legacy_handoff) = build_handoff(&legacy, &titles).unwrap();
+        let (_, fused_handoff) = build_handoff(&fused, &titles).unwrap();
+        assert!(json_semantic_equal(&fused_handoff, &legacy_handoff));
+    }
+
+    #[test]
+    fn r9_single_task_subagent_with_final_answer_is_not_dropped() {
+        let path = write_single_task_subagent_case(true, true, true);
+        let cwd = normalize_windows_path(r"D:\workspace");
+        let legacy = convert_codex_session_file(&path, &cwd, Path::new("missing-attachments"))
+            .unwrap()
+            .unwrap();
+        let fused =
+            convert_codex_session_file_streaming(&path, &cwd, Path::new("missing-attachments"))
+                .unwrap()
+                .unwrap();
+        let _ = fs::remove_file(&path);
+        assert_eq!(legacy.messages.len(), 1);
+        assert_eq!(fused.messages.len(), 1);
+        assert_eq!(
+            fused.messages[0].get("role").and_then(Value::as_str),
+            Some("assistant")
+        );
+        let titles = HashMap::new();
+        let (_, legacy_handoff) = build_handoff(&legacy, &titles).unwrap();
+        let (_, fused_handoff) = build_handoff(&fused, &titles).unwrap();
+        assert!(json_semantic_equal(&fused_handoff, &legacy_handoff));
+    }
+
+    #[test]
+    fn r9_unrecognized_subagent_remains_an_error_not_a_silent_skip() {
+        let path = write_single_task_subagent_case(false, false, false);
+        let cwd = normalize_windows_path(r"D:\workspace");
+        let result =
+            convert_codex_session_file_streaming(&path, &cwd, Path::new("missing-attachments"));
+        let _ = fs::remove_file(&path);
+        assert!(result.is_err());
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("No exportable messages")
         );
     }
 
@@ -19338,17 +20077,26 @@ text(r);"#;
         let registry = collect_attachment_contents(&records, Path::new("missing-attachments"));
         assert_eq!(registry.len(), 1);
         let entry = registry.values().next().unwrap();
+        // The tool output remains observable, but cannot be treated as the
+        // user's exact objective when its original file was not supplied.
         assert_eq!(
             value_str(entry.metadata.get("restoration_source")),
-            Some("rollout_tool_output")
+            Some("attachment_reference")
         );
         assert_eq!(
             value_str(entry.metadata.get("restoration_status")),
-            Some("restored")
+            Some("tool_output_unverified")
         );
-        // The command renderer contributes one framing CR/LF after stdout.
-        // Exact attachment content removes only that framing line ending.
-        assert_eq!(entry.content.as_deref(), Some("objective body"));
+        assert!(entry.content.is_none());
+        let hashes = entry
+            .metadata
+            .get("tool_candidate_sha256")
+            .and_then(Value::as_array)
+            .unwrap();
+        assert_eq!(
+            hashes,
+            &vec![Value::String(sha256_text(Some("objective body")))]
+        );
     }
 
     #[test]
@@ -19385,12 +20133,19 @@ text(r);"#;
         assert_eq!(registry.len(), 1);
         let entry = registry.values().next().unwrap();
         assert_eq!(
-            value_str(entry.metadata.get("restoration_source")),
-            Some("rollout_tool_output")
+            value_str(entry.metadata.get("restoration_status")),
+            Some("tool_output_unverified")
         );
-        // Direct function-call rendering also contributes one framing CRLF after
-        // stdout; the exact attachment bytes therefore do not include it.
-        assert_eq!(entry.content.as_deref(), Some("function objective"));
+        assert!(entry.content.is_none());
+        assert_eq!(
+            entry
+                .metadata
+                .get("tool_candidate_sha256")
+                .and_then(Value::as_array),
+            Some(&vec![Value::String(sha256_text(Some(
+                "function objective"
+            )))])
+        );
     }
 
     #[test]
@@ -20641,6 +21396,7 @@ text(r);"#;
             activities: Vec::new(),
             execution_profile: None,
             data_quality: None,
+            schema_info: None,
             source_path: PathBuf::from(format!("{session_id}.jsonl")),
             subagent_sessions: Vec::new(),
             internal_session_ids: Vec::new(),
@@ -20983,6 +21739,7 @@ text(r);"#;
             activities: Vec::new(),
             execution_profile: None,
             data_quality: None,
+            schema_info: None,
             source_path: output_directory.join("source.jsonl"),
             subagent_sessions: Vec::new(),
             internal_session_ids: Vec::new(),

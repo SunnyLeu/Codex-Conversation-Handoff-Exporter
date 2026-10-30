@@ -545,10 +545,14 @@ fn load_header(path: &Path) -> Result<bool> {
     let raw = if rollout_codec::is_compressed_rollout(path) {
         rollout_codec::read_rollout_snapshot(path)?
     } else {
-        let mut file = std::io::BufReader::new(fs::File::open(path)?);
+        use std::io::{BufRead, Read};
+        let file = crate::open_shared_read(path)?;
+        let limit = crate::source_guard::snapshot_for(path)
+            .map(|snapshot| snapshot.len)
+            .unwrap_or(file.metadata()?.len());
+        let mut reader = std::io::BufReader::new(file.take(limit));
         let mut first = Vec::new();
-        use std::io::BufRead;
-        file.read_until(b'\n', &mut first)?;
+        reader.read_until(b'\n', &mut first)?;
         first
     };
     let line = raw.split(|b| *b == b'\n').next().unwrap_or(&[]);

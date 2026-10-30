@@ -5,6 +5,19 @@
 
 這是非官方社群專案，並非 OpenAI 的產品，也未獲 OpenAI 背書。
 
+## 2.1.0 更新摘要（2026-10-30）
+
+`2.1.0` 著重於**對話內容可追溯、來源附件保真，以及不中斷 Codex 的安全匯出**。使用方式與原有 Windows x64 主控台操作維持相同。
+
+- **安全匯出仍在進行中的對話**：為選定的每份 Session 固定已讀取的原始位元組範圍並驗證 SHA-256。Codex 可以繼續追加紀錄；新追加的訊息與新建的 Session 留待下一次匯出。原有前綴若遭改寫或截斷，仍會拒絕匯出。這是逐檔快照，**不是多檔案同一瞬間的原子快照**。
+- **保留正在工作的子代理**：可信委派的子代理即使只有單次 `task_started`、工具活動、尚未正式答覆，也能正確保留；不把初始化／繼承的指令冒充子代理發言。
+- **附件來源原件優先**：原始附件可安全取得且為 UTF-8 時，以附件檔案原始位元組還原內容，記錄 SHA-256 與工具候選差異；原件不能驗證時不把工具文字錯標為已驗證。
+- **擴充來源觀測**：新增 `handoff_schema_version: "1.0"`、`source_observations`、`schema_coverage`、`source_snapshot`，更完整保留工具原生結果、錯誤、設定、權限、子代理、媒體與用量觀測，並描述截短、未知與未驗證資料。
+
+Windows x64 實測：**241 項 Rust 測試通過**、原有 **7 組 EXE 端到端測試**與新增 **1 組子代理 EXE 測試**通過、**42 項 Schema 內容事實**通過。真實資料複查已確認 38 筆先前受工具錯誤文字污染的附件恢復原件，另有 109 筆原本正確的附件維持一致；先前失敗的子代理也已在真實新匯出中確認收錄。完整相容與限制請參閱 [Schema 契約](SCHEMA-CONTRACT.md) 與 [2.1.0 變更說明](CHANGES-2.1.0.md)。
+
+**重要限制：**Handoff 不是官方 Codex 格式，也不是對所有原始資料完全無損的備份。已觀測來源的未知格式、有界截短、缺失原件及未來版本差異，仍須參照輸出中的保留與覆蓋說明；成功匯出不代表所有語意內容均獲完整性認證。
+
 ## 2.0.3 修正說明：來源一致性與首頁殘留對話
 
 - 無人值守的 `--project-id ... --yes` 匯出，改為在寫入前複查**本次專案**的主對話、子代理、實體 Rollout、標題與專案身分；新增的目標對話／續接會拒絕使用舊掃描結果，避免無聲漏匯。
@@ -24,7 +37,7 @@
 在本儲存庫的 [Releases](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/releases)
 下載 Windows x64 套件：
 
-`Codex-Conversation-Handoff-Exporter-2.0.3-windows-x64.zip`
+`Codex-Conversation-Handoff-Exporter-2.1.0-windows-x64.zip`
 
 解壓後執行 `Codex-Conversation-Handoff-Exporter.exe`。
 EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔，可以移至自己偏好的位置。
@@ -32,7 +45,7 @@ EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔�
 Windows 自帶的系統 DLL 仍為必要元件。重新散布時請保留套件內的授權聲明。
 
 **平台範圍：僅支援 Windows x64（x86-64／AMD64）。**
-2.0.0 已通過 Windows 11 x64 發行驗收；2.0.1 已完成 Windows x64 發行驗收。不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
+2.1.0 已在 Windows 11 x64 完成驗收。不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
 其他 Windows 版本尚未完成驗證。EXE、Codex 資料、系統暫存目錄與輸出位置仍受 Windows 存取權限限制。
 
 ## 基本操作

@@ -1,0 +1,2313 @@
+{
+  "basis": "2026-10-29 observed native shells; NOT a completeness certificate",
+  "scopes": [
+    "",
+    "/metadata",
+    "/payload",
+    "/payload/active_permission_profile",
+    "/payload/content",
+    "/payload/content/[]",
+    "/payload/file_system_sandbox_policy",
+    "/payload/internal_chat_message_metadata_passthrough",
+    "/payload/item",
+    "/payload/item/action",
+    "/payload/item/content",
+    "/payload/item/content/[]",
+    "/payload/item/content_items",
+    "/payload/item/content_items/[]",
+    "/payload/item/result",
+    "/payload/item/result/content",
+    "/payload/item/result/content/[]",
+    "/payload/permission_profile",
+    "/payload/reasoning",
+    "/payload/resume_metadata",
+    "/payload/retained_context",
+    "/payload/sandbox_policy",
+    "/payload/thread_settings",
+    "/payload/thread_settings/reasoning",
+    "/payload/thread_token_usage",
+    "/payload/turn_attribution",
+    "/payload/turn_token_usage",
+    "/payload/usage"
+  ],
+  "families": {
+    "__legacy_meta": {
+      "": [
+        "object"
+      ],
+      "/id": [
+        "string"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/instructions": [
+        "null"
+      ],
+      "/git": [
+        "object"
+      ]
+    },
+    "state": {
+      "": [
+        "object"
+      ],
+      "/record_type": [
+        "string"
+      ]
+    },
+    "message": {
+      "": [
+        "object"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/id": [
+        "null"
+      ],
+      "/role": [
+        "string"
+      ],
+      "/content": [
+        "array"
+      ]
+    },
+    "session_meta": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/session_id": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/timestamp": [
+        "string"
+      ],
+      "/payload/cwd": [
+        "string"
+      ],
+      "/payload/originator": [
+        "string"
+      ],
+      "/payload/cli_version": [
+        "string"
+      ],
+      "/payload/source": [
+        "object",
+        "string"
+      ],
+      "/payload/thread_source": [
+        "string"
+      ],
+      "/payload/model_provider": [
+        "string"
+      ],
+      "/payload/base_instructions": [
+        "object"
+      ],
+      "/payload/history_mode": [
+        "string"
+      ],
+      "/payload/context_window": [
+        "object"
+      ],
+      "/payload/git": [
+        "object"
+      ],
+      "/payload/dynamic_tools": [
+        "array"
+      ],
+      "/payload/forked_from_id": [
+        "string"
+      ],
+      "/payload/parent_thread_id": [
+        "string"
+      ],
+      "/payload/agent_nickname": [
+        "string"
+      ],
+      "/payload/agent_path": [
+        "string"
+      ],
+      "/payload/subagent_history_start_ordinal": [
+        "integer"
+      ],
+      "/payload/multi_agent_version": [
+        "string"
+      ],
+      "/payload/runtime_workspace_roots": [
+        "array"
+      ],
+      "/payload/creator_user_id": [
+        "string"
+      ],
+      "/payload/creator_account_id": [
+        "string"
+      ],
+      "/payload/history_base": [
+        "object"
+      ]
+    },
+    "event_msg:task_started": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/started_at": [
+        "integer"
+      ],
+      "/payload/model_context_window": [
+        "integer",
+        "null"
+      ],
+      "/payload/collaboration_mode_kind": [
+        "string"
+      ],
+      "/payload/root_turn_id": [
+        "string"
+      ],
+      "/payload/turn_attribution": [
+        "object"
+      ],
+      "/payload/turn_attribution/turn_id": [
+        "string"
+      ],
+      "/payload/turn_attribution/turn_trigger": [
+        "string"
+      ],
+      "/payload/turn_attribution/parent_turn_id": [
+        "null",
+        "string"
+      ],
+      "/payload/turn_attribution/initiating_agent_path": [
+        "null",
+        "string"
+      ],
+      "/payload/turn_attribution/root_turn_id": [
+        "string"
+      ]
+    },
+    "response_item:message": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/role": [
+        "string"
+      ],
+      "/payload/content": [
+        "array"
+      ],
+      "/payload/content/[]": [
+        "object"
+      ],
+      "/payload/content/[]/type": [
+        "string"
+      ],
+      "/payload/content/[]/text": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/phase": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/create_time": [
+        "number"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/content_item_kinds": [
+        "array"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/mcp_attribution": [
+        "object"
+      ],
+      "/metadata/user_input_order": [
+        "integer"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ],
+      "/metadata/retained_source": [
+        "object"
+      ],
+      "/metadata/guardian_sources": [
+        "array"
+      ],
+      "/metadata/guardian_source_order_guidance": [
+        "boolean"
+      ],
+      "/metadata/guardian_retained_omissions": [
+        "object"
+      ],
+      "/payload/status": [
+        "string"
+      ],
+      "/payload/content/[]/annotations": [
+        "array"
+      ],
+      "/payload/content/[]/logprobs": [
+        "array"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/content_item_metadata": [
+        "array"
+      ],
+      "/payload/content/[]/image_url": [
+        "string"
+      ],
+      "/payload/content/[]/detail": [
+        "string"
+      ],
+      "/payload/encrypted_content": [
+        "string"
+      ]
+    },
+    "world_state": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/full": [
+        "boolean"
+      ],
+      "/payload/state": [
+        "object"
+      ]
+    },
+    "turn_context": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/cwd": [
+        "string"
+      ],
+      "/payload/workspace_roots": [
+        "array"
+      ],
+      "/payload/current_date": [
+        "string"
+      ],
+      "/payload/timezone": [
+        "string"
+      ],
+      "/payload/approval_policy": [
+        "string"
+      ],
+      "/payload/approvals_reviewer": [
+        "string"
+      ],
+      "/payload/sandbox_policy": [
+        "object"
+      ],
+      "/payload/sandbox_policy/type": [
+        "string"
+      ],
+      "/payload/sandbox_policy/network_access": [
+        "boolean"
+      ],
+      "/payload/sandbox_policy/exclude_tmpdir_env_var": [
+        "boolean"
+      ],
+      "/payload/sandbox_policy/exclude_slash_tmp": [
+        "boolean"
+      ],
+      "/payload/permission_profile": [
+        "object"
+      ],
+      "/payload/permission_profile/type": [
+        "string"
+      ],
+      "/payload/permission_profile/file_system": [
+        "object"
+      ],
+      "/payload/permission_profile/network": [
+        "string"
+      ],
+      "/payload/file_system_sandbox_policy": [
+        "object"
+      ],
+      "/payload/file_system_sandbox_policy/kind": [
+        "string"
+      ],
+      "/payload/file_system_sandbox_policy/entries": [
+        "array"
+      ],
+      "/payload/model": [
+        "string"
+      ],
+      "/payload/comp_hash": [
+        "string"
+      ],
+      "/payload/personality": [
+        "string"
+      ],
+      "/payload/collaboration_mode": [
+        "object"
+      ],
+      "/payload/multi_agent_version": [
+        "string"
+      ],
+      "/payload/multi_agent_mode": [
+        "string"
+      ],
+      "/payload/realtime_active": [
+        "boolean"
+      ],
+      "/payload/effort": [
+        "string"
+      ],
+      "/payload/summary": [
+        "string"
+      ],
+      "/payload/sandbox_policy/writable_roots": [
+        "array"
+      ],
+      "/payload/active_permission_profile": [
+        "object"
+      ],
+      "/payload/active_permission_profile/id": [
+        "string"
+      ],
+      "/payload/root_turn_id": [
+        "string"
+      ],
+      "/payload/disabled_plugin_ids": [
+        "array"
+      ],
+      "/payload/cyber_access_program": [
+        "string"
+      ]
+    },
+    "event_msg:item_completed:UserMessage": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/client_id": [
+        "string"
+      ],
+      "/payload/item/content": [
+        "array"
+      ],
+      "/payload/item/content/[]": [
+        "object"
+      ],
+      "/payload/item/content/[]/type": [
+        "string"
+      ],
+      "/payload/item/content/[]/text": [
+        "string"
+      ],
+      "/payload/item/content/[]/text_elements": [
+        "array"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/item/content/[]/path": [
+        "string"
+      ]
+    },
+    "response_item:reasoning": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/summary": [
+        "array"
+      ],
+      "/payload/content": [
+        "null"
+      ],
+      "/payload/encrypted_content": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ]
+    },
+    "event_msg:item_completed:AgentMessage": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/content": [
+        "array"
+      ],
+      "/payload/item/content/[]": [
+        "object"
+      ],
+      "/payload/item/content/[]/type": [
+        "string"
+      ],
+      "/payload/item/content/[]/text": [
+        "string"
+      ],
+      "/payload/item/phase": [
+        "string"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/item/memory_citation": [
+        "object"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/item/delivery": [
+        "string"
+      ],
+      "/payload/item/questions": [
+        "array"
+      ]
+    },
+    "response_item:custom_tool_call": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/status": [
+        "string"
+      ],
+      "/payload/call_id": [
+        "string"
+      ],
+      "/payload/name": [
+        "string"
+      ],
+      "/payload/input": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/create_time": [
+        "number"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ],
+      "/payload/encrypted_content": [
+        "string"
+      ]
+    },
+    "response_item:custom_tool_call_output": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/call_id": [
+        "string"
+      ],
+      "/payload/output": [
+        "array",
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/create_time": [
+        "number"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/fallback_token_limit_override": [
+        "integer"
+      ],
+      "/metadata/mcp_attribution": [
+        "object"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ]
+    },
+    "event_msg:token_count": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/info": [
+        "null",
+        "object"
+      ],
+      "/payload/rate_limits": [
+        "null",
+        "object"
+      ]
+    },
+    "event_msg:item_completed:FileChange": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/changes": [
+        "object"
+      ],
+      "/payload/item/status": [
+        "string"
+      ],
+      "/payload/item/stdout": [
+        "string"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/item/stderr": [
+        "string"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ]
+    },
+    "event_msg:task_complete": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/last_agent_message": [
+        "null",
+        "string"
+      ],
+      "/payload/completed_at": [
+        "integer"
+      ],
+      "/payload/duration_ms": [
+        "integer"
+      ],
+      "/payload/time_to_first_token_ms": [
+        "integer"
+      ],
+      "/payload/started_at": [
+        "integer"
+      ],
+      "/payload/error": [
+        "object"
+      ],
+      "/payload/root_turn_id": [
+        "string"
+      ]
+    },
+    "event_msg:thread_settings_applied": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_settings": [
+        "object"
+      ],
+      "/payload/thread_settings/model": [
+        "string"
+      ],
+      "/payload/thread_settings/model_provider_id": [
+        "string"
+      ],
+      "/payload/thread_settings/service_tier": [
+        "string"
+      ],
+      "/payload/thread_settings/approval_policy": [
+        "string"
+      ],
+      "/payload/thread_settings/approvals_reviewer": [
+        "string"
+      ],
+      "/payload/thread_settings/permission_profile": [
+        "object"
+      ],
+      "/payload/thread_settings/active_permission_profile": [
+        "object"
+      ],
+      "/payload/thread_settings/cwd": [
+        "string"
+      ],
+      "/payload/thread_settings/reasoning_effort": [
+        "string"
+      ],
+      "/payload/thread_settings/reasoning_summary": [
+        "string"
+      ],
+      "/payload/thread_settings/personality": [
+        "string"
+      ],
+      "/payload/thread_settings/collaboration_mode": [
+        "object"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/thread_settings/runtime_workspace_roots": [
+        "array"
+      ],
+      "/payload/thread_settings/disabled_plugin_ids": [
+        "array"
+      ]
+    },
+    "event_msg:item_completed:Reasoning": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/summary_text": [
+        "array"
+      ],
+      "/payload/item/raw_content": [
+        "array"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ]
+    },
+    "response_item:function_call": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/name": [
+        "string"
+      ],
+      "/payload/arguments": [
+        "string"
+      ],
+      "/payload/call_id": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ],
+      "/payload/namespace": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/create_time": [
+        "number"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/user_input_order": [
+        "integer"
+      ],
+      "/payload/status": [
+        "string"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ],
+      "/payload/encrypted_content": [
+        "string"
+      ]
+    },
+    "response_item:function_call_output": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/call_id": [
+        "string"
+      ],
+      "/payload/output": [
+        "array",
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/create_time": [
+        "number"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/executed_tool_calls": [
+        "array"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/tool_calls_complete": [
+        "boolean"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/fallback_token_limit_override": [
+        "integer"
+      ],
+      "/metadata/mcp_attribution": [
+        "object"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ]
+    },
+    "event_msg:item_completed:WebSearch": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/query": [
+        "string"
+      ],
+      "/payload/item/action": [
+        "object"
+      ],
+      "/payload/item/action/type": [
+        "string"
+      ],
+      "/payload/item/action/queries": [
+        "array"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/item/action/pattern": [
+        "string"
+      ],
+      "/payload/item/action/url": [
+        "string"
+      ],
+      "/payload/item/action/query": [
+        "string"
+      ],
+      "/payload/item/results": [
+        "array"
+      ]
+    },
+    "compacted": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/message": [
+        "string"
+      ],
+      "/payload/replacement_history": [
+        "array"
+      ],
+      "/payload/window_number": [
+        "integer"
+      ],
+      "/payload/first_window_id": [
+        "string"
+      ],
+      "/payload/previous_window_id": [
+        "string"
+      ],
+      "/payload/window_id": [
+        "string"
+      ],
+      "/payload/compaction_response_id": [
+        "null",
+        "string"
+      ],
+      "/payload/latest_token_usage_record": [
+        "null",
+        "object"
+      ],
+      "/payload/guardian_history": [
+        "array"
+      ],
+      "/payload/retained_context": [
+        "object"
+      ],
+      "/payload/retained_context/verified_answers": [
+        "array"
+      ],
+      "/payload/retained_context/incomplete": [
+        "boolean"
+      ],
+      "/payload/retained_context/user_messages": [
+        "array"
+      ],
+      "/payload/retained_context/user_messages_incomplete": [
+        "boolean"
+      ],
+      "/payload/retained_context/next_order": [
+        "integer"
+      ],
+      "/payload/replacement_history_metadata": [
+        "array"
+      ],
+      "/payload/retained_context/assistant_messages": [
+        "array"
+      ],
+      "/payload/retained_context/assistant_messages_incomplete": [
+        "boolean"
+      ],
+      "/payload/resume_metadata": [
+        "object"
+      ],
+      "/payload/resume_metadata/multi_agent_version": [
+        "string"
+      ],
+      "/payload/resume_metadata/last_started_turn_id": [
+        "string"
+      ],
+      "/payload/resume_metadata/previous_turn_settings": [
+        "object"
+      ],
+      "/payload/resume_metadata/turn_attribution": [
+        "object"
+      ]
+    },
+    "event_msg:item_completed:ContextCompaction": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ]
+    },
+    "event_msg:item_completed:Plan": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/text": [
+        "string"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ]
+    },
+    "event_msg:thread_goal_updated": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/threadId": [
+        "string"
+      ],
+      "/payload/goal": [
+        "object"
+      ]
+    },
+    "event_msg:item_completed:McpToolCall": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/server": [
+        "string"
+      ],
+      "/payload/item/tool": [
+        "string"
+      ],
+      "/payload/item/arguments": [
+        "object"
+      ],
+      "/payload/item/status": [
+        "string"
+      ],
+      "/payload/item/result": [
+        "object"
+      ],
+      "/payload/item/result/content": [
+        "array"
+      ],
+      "/payload/item/result/content/[]": [
+        "object"
+      ],
+      "/payload/item/result/content/[]/type": [
+        "string"
+      ],
+      "/payload/item/result/content/[]/text": [
+        "string"
+      ],
+      "/payload/item/result/isError": [
+        "boolean"
+      ],
+      "/payload/item/duration": [
+        "object"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/item/result/_meta": [
+        "object"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/item/error": [
+        "object"
+      ],
+      "/payload/item/readOnlyHint": [
+        "boolean"
+      ],
+      "/payload/item/result/content/[]/data": [
+        "string"
+      ],
+      "/payload/item/result/content/[]/mimeType": [
+        "string"
+      ],
+      "/payload/item/result/content/[]/_meta": [
+        "object"
+      ],
+      "/payload/item/pluginId": [
+        "string"
+      ],
+      "/payload/item/connectorId": [
+        "string"
+      ],
+      "/payload/item/linkId": [
+        "string"
+      ],
+      "/payload/item/appName": [
+        "string"
+      ],
+      "/payload/item/actionName": [
+        "string"
+      ],
+      "/payload/item/result/structuredContent": [
+        "object"
+      ]
+    },
+    "event_msg:item_completed:SubAgentActivity": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/kind": [
+        "string"
+      ],
+      "/payload/item/agent_thread_id": [
+        "string"
+      ],
+      "/payload/item/agent_path": [
+        "string"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/item/model": [
+        "null",
+        "string"
+      ],
+      "/payload/item/reasoning_effort": [
+        "null",
+        "string"
+      ]
+    },
+    "inter_agent_communication_metadata": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/trigger_turn": [
+        "boolean"
+      ]
+    },
+    "response_item:agent_message": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/author": [
+        "string"
+      ],
+      "/payload/recipient": [
+        "string"
+      ],
+      "/payload/content": [
+        "array"
+      ],
+      "/payload/content/[]": [
+        "object"
+      ],
+      "/payload/content/[]/type": [
+        "string"
+      ],
+      "/payload/content/[]/text": [
+        "string"
+      ],
+      "/payload/content/[]/encrypted_content": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/create_time": [
+        "number"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/user_input_order": [
+        "integer"
+      ],
+      "/metadata/mcp_attribution": [
+        "object"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/content_item_metadata": [
+        "array"
+      ]
+    },
+    "event_msg:turn_aborted": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/reason": [
+        "string"
+      ],
+      "/payload/started_at": [
+        "integer"
+      ],
+      "/payload/completed_at": [
+        "integer"
+      ],
+      "/payload/duration_ms": [
+        "integer"
+      ],
+      "/payload/root_turn_id": [
+        "string"
+      ]
+    },
+    "response_item:tool_search_call": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/call_id": [
+        "string"
+      ],
+      "/payload/status": [
+        "string"
+      ],
+      "/payload/execution": [
+        "string"
+      ],
+      "/payload/arguments": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ]
+    },
+    "response_item:tool_search_output": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/call_id": [
+        "string"
+      ],
+      "/payload/status": [
+        "string"
+      ],
+      "/payload/execution": [
+        "string"
+      ],
+      "/payload/tools": [
+        "array"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ]
+    },
+    "event_msg:item_completed:CommandExecution": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/process_id": [
+        "string"
+      ],
+      "/payload/item/command": [
+        "array"
+      ],
+      "/payload/item/cwd": [
+        "string"
+      ],
+      "/payload/item/parsed_cmd": [
+        "array"
+      ],
+      "/payload/item/source": [
+        "string"
+      ],
+      "/payload/item/status": [
+        "string"
+      ],
+      "/payload/item/stdout": [
+        "string"
+      ],
+      "/payload/item/stderr": [
+        "string"
+      ],
+      "/payload/item/aggregated_output": [
+        "string"
+      ],
+      "/payload/item/exit_code": [
+        "integer"
+      ],
+      "/payload/item/duration": [
+        "object"
+      ],
+      "/payload/item/formatted_output": [
+        "string"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ]
+    },
+    "event_msg:item_completed:Extension": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/kind": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/query": [
+        "string"
+      ],
+      "/payload/item/action": [
+        "object"
+      ],
+      "/payload/item/action/type": [
+        "string"
+      ],
+      "/payload/item/action/query": [
+        "null",
+        "string"
+      ],
+      "/payload/item/action/queries": [
+        "array",
+        "null"
+      ],
+      "/payload/item/results": [
+        "array"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ],
+      "/payload/item/action/url": [
+        "null",
+        "string"
+      ],
+      "/payload/item/action/pattern": [
+        "string"
+      ],
+      "/payload/item/durationMs": [
+        "integer"
+      ]
+    },
+    "event_msg:item_completed:ImageView": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/path": [
+        "string"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ]
+    },
+    "event_msg:item_completed:CollabAgentToolCall": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/tool": [
+        "string"
+      ],
+      "/payload/item/status": [
+        "string"
+      ],
+      "/payload/item/sender_thread_id": [
+        "string"
+      ],
+      "/payload/item/receiver_thread_ids": [
+        "array"
+      ],
+      "/payload/item/receiver_agents": [
+        "array"
+      ],
+      "/payload/item/agents_states": [
+        "object"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ]
+    },
+    "event_msg:item_completed:DynamicToolCall": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/item": [
+        "object"
+      ],
+      "/payload/item/type": [
+        "string"
+      ],
+      "/payload/item/id": [
+        "string"
+      ],
+      "/payload/item/namespace": [
+        "string"
+      ],
+      "/payload/item/tool": [
+        "string"
+      ],
+      "/payload/item/arguments": [
+        "object"
+      ],
+      "/payload/item/status": [
+        "string"
+      ],
+      "/payload/item/content_items": [
+        "array"
+      ],
+      "/payload/item/content_items/[]": [
+        "object"
+      ],
+      "/payload/item/content_items/[]/type": [
+        "string"
+      ],
+      "/payload/item/content_items/[]/text": [
+        "string"
+      ],
+      "/payload/item/success": [
+        "boolean"
+      ],
+      "/payload/item/duration": [
+        "object"
+      ],
+      "/payload/started_at_ms": [
+        "integer"
+      ],
+      "/payload/completed_at_ms": [
+        "integer"
+      ]
+    },
+    "token_usage_record": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/thread_id": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/session_id": [
+        "string"
+      ],
+      "/payload/root_turn_id": [
+        "string"
+      ],
+      "/payload/response_id": [
+        "string"
+      ],
+      "/payload/usage": [
+        "object"
+      ],
+      "/payload/usage/input_tokens": [
+        "integer"
+      ],
+      "/payload/usage/cached_input_tokens": [
+        "integer"
+      ],
+      "/payload/usage/cache_write_input_tokens": [
+        "integer"
+      ],
+      "/payload/usage/output_tokens": [
+        "integer"
+      ],
+      "/payload/usage/reasoning_output_tokens": [
+        "integer"
+      ],
+      "/payload/usage/total_tokens": [
+        "integer"
+      ],
+      "/payload/turn_token_usage": [
+        "object"
+      ],
+      "/payload/turn_token_usage/input_tokens": [
+        "integer"
+      ],
+      "/payload/turn_token_usage/cached_input_tokens": [
+        "integer"
+      ],
+      "/payload/turn_token_usage/cache_write_input_tokens": [
+        "integer"
+      ],
+      "/payload/turn_token_usage/output_tokens": [
+        "integer"
+      ],
+      "/payload/turn_token_usage/reasoning_output_tokens": [
+        "integer"
+      ],
+      "/payload/turn_token_usage/total_tokens": [
+        "integer"
+      ],
+      "/payload/thread_token_usage": [
+        "object"
+      ],
+      "/payload/thread_token_usage/input_tokens": [
+        "integer"
+      ],
+      "/payload/thread_token_usage/cached_input_tokens": [
+        "integer"
+      ],
+      "/payload/thread_token_usage/cache_write_input_tokens": [
+        "integer"
+      ],
+      "/payload/thread_token_usage/output_tokens": [
+        "integer"
+      ],
+      "/payload/thread_token_usage/reasoning_output_tokens": [
+        "integer"
+      ],
+      "/payload/thread_token_usage/total_tokens": [
+        "integer"
+      ]
+    },
+    "response_item:compaction": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/encrypted_content": [
+        "string"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough": [
+        "object"
+      ],
+      "/payload/internal_chat_message_metadata_passthrough/turn_id": [
+        "string"
+      ]
+    },
+    "retained_context:verified_answer": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/turn_id": [
+        "string"
+      ],
+      "/payload/call_id": [
+        "string"
+      ],
+      "/payload/questions": [
+        "array"
+      ],
+      "/payload/acceptance_order": [
+        "integer"
+      ]
+    },
+    "response_item:additional_tools": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/id": [
+        "string"
+      ],
+      "/payload/role": [
+        "string"
+      ],
+      "/payload/tools": [
+        "array"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/mcp_attribution": [
+        "object"
+      ],
+      "/metadata/inherited_user_message": [
+        "boolean"
+      ]
+    },
+    "response_item:configuration_update": {
+      "": [
+        "object"
+      ],
+      "/timestamp": [
+        "string"
+      ],
+      "/ordinal": [
+        "integer"
+      ],
+      "/type": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/payload/type": [
+        "string"
+      ],
+      "/payload/reasoning": [
+        "object"
+      ],
+      "/payload/reasoning/effort": [
+        "string"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/metadata/client_authored": [
+        "boolean"
+      ],
+      "/metadata/harness_authored_configuration": [
+        "boolean"
+      ]
+    }
+  }
+}
