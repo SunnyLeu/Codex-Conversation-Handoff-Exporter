@@ -1,8 +1,60 @@
 //! Read-only output preflight. No force option, no destination guessing.
 use anyhow::{Context, Result, bail};
+use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+// Existing Handoffs can be very large. Ownership checks need only the root
+// conversation_id, but must still reject malformed JSON anywhere in the file.
+// Deserialize all other values as IgnoredAny instead of allocating a complete
+// serde_json::Value tree. Repeated conversation_id keys retain serde_json::Value's
+// historical last-key-wins behavior; a final non-string/blank key still fails.
+struct ExistingIdentity(Option<String>);
+
+impl<'de> Deserialize<'de> for ExistingIdentity {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct IdentityVisitor;
+
+        impl<'de> Visitor<'de> for IdentityVisitor {
+            type Value = ExistingIdentity;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a Handoff JSON object")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> std::result::Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut identity = None;
+                while let Some(key) = map.next_key::<std::borrow::Cow<'de, str>>()? {
+                    if key == "conversation_id" {
+                        let value: serde_json::Value = map.next_value()?;
+                        identity = value
+                            .as_str()
+                            .filter(|id| !id.trim().is_empty())
+                            .map(str::to_owned);
+                    } else {
+                        map.next_value::<IgnoredAny>()?;
+                    }
+                }
+                Ok(ExistingIdentity(identity))
+            }
+        }
+
+        deserializer.deserialize_map(IdentityVisitor)
+    }
+}
+
+fn existing_conversation_id(
+    bytes: &[u8],
+) -> std::result::Result<Option<String>, serde_json::Error> {
+    serde_json::from_slice::<ExistingIdentity>(bytes).map(|identity| identity.0)
+}
 
 pub(crate) fn absolute(path: &Path) -> Result<PathBuf> {
     if path.to_string_lossy().trim().is_empty()
@@ -113,12 +165,10 @@ pub(crate) fn validate_existing(
         }
         let bytes =
             fs::read(&p).with_context(|| format!("無法讀取既有 Handoff：{}", p.display()))?;
-        let value: serde_json::Value = serde_json::from_slice(&bytes)
+        let id = existing_conversation_id(&bytes)
             .with_context(|| format!("既有 Handoff 已損壞，未進行覆寫：{}", p.display()))?;
-        let id = value
-            .get("conversation_id")
-            .and_then(serde_json::Value::as_str)
-            .filter(|s| !s.trim().is_empty())
+        let id = id
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("既有 Handoff 無法確認身分：{}", p.display()))?;
         if !allowed.contains(id) && !allow_foreign {
             bail!("資料夾含其他匯出目標的 Handoff（{id}）；拒絕覆寫或清理。請選擇其他資料夾。");
@@ -161,15 +211,11 @@ pub(crate) fn validate_planned(
         }
         let data = fs::read(&planned)
             .with_context(|| format!("無法讀取目的檔案：{}", planned.display()))?;
-        let original: serde_json::Value = serde_json::from_slice(&data)
+        let current_id = existing_conversation_id(&data)
             .with_context(|| format!("目的檔案損壞，不允許覆寫：{}", planned.display()))?;
-        let current_id = original
-            .get("conversation_id")
-            .and_then(serde_json::Value::as_str)
-            .filter(|id| !id.trim().is_empty())
-            .ok_or_else(|| {
-                anyhow::anyhow!("目的檔案身分不明，不允許覆寫：{}", planned.display())
-            })?;
+        let current_id = current_id.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("目的檔案身分不明，不允許覆寫：{}", planned.display())
+        })?;
         if current_id != expected_id {
             bail!(
                 "目的檔名已屬於另一條對話（{current_id}），拒絕覆寫：{}",
@@ -183,6 +229,43 @@ pub(crate) fn validate_planned(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identity_reader_validates_full_document_without_materializing_unknown_values() {
+        let valid = br#"{"messages":[{"content":[1,2,{"nested":true}]}],"conversation_id":"same","activities":[]}"#;
+        assert_eq!(
+            existing_conversation_id(valid).unwrap().as_deref(),
+            Some("same")
+        );
+
+        // Match serde_json::Value's handling of repeated object keys exactly.
+        assert_eq!(
+            existing_conversation_id(br#"{"conversation_id":"before","conversation_id":"after"}"#)
+                .unwrap()
+                .as_deref(),
+            Some("after")
+        );
+        assert_eq!(
+            existing_conversation_id(br#"{"conversation_id":"before","conversation_id":null}"#)
+                .unwrap(),
+            None
+        );
+        for invalid in [
+            &br#"{"conversation_id":"same","messages":[1,]}"#[..],
+            &br#"{"conversation_id":"same"} {}"#[..],
+            &br#"{"conversation_id":"same","broken":"\uQQQQ"}"#[..],
+        ] {
+            assert!(existing_conversation_id(invalid).is_err());
+        }
+        for missing in [
+            &br#"{}"#[..],
+            &br#"{"conversation_id":null}"#[..],
+            &br#"{"conversation_id":123}"#[..],
+            &br#"{"conversation_id":"  "}"#[..],
+        ] {
+            assert_eq!(existing_conversation_id(missing).unwrap(), None);
+        }
+    }
     #[test]
     fn foreign_and_broken_handoffs_are_preserved() {
         let d = crate::codex_paths::TempDir::new("dest-test").unwrap();

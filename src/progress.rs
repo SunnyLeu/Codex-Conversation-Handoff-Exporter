@@ -66,7 +66,10 @@ impl Reporter {
                     break;
                 }
                 tick += 1;
-                std::thread::sleep(std::time::Duration::from_millis(120));
+                // Unlike sleep, park_timeout can be interrupted by finish().
+                // Otherwise the product pays up to one 120 ms polling period
+                // after all Handoffs have already been written.
+                std::thread::park_timeout(std::time::Duration::from_millis(120));
             }
             if visual {
                 crate::console_ui::finish_progress(ansi);
@@ -84,6 +87,9 @@ impl Reporter {
             s.stop.store(true, Ordering::Relaxed);
         }
         if let Some(w) = self.worker.take() {
+            // An unpark token is retained even if the worker has not yet
+            // reached park_timeout; no wake-up can be lost here.
+            w.thread().unpark();
             let _ = w.join();
         }
     }

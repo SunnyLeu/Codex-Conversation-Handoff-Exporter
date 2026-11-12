@@ -7,6 +7,8 @@
 //! Membership identity and consulted attachments remain protected. This is a
 //! bounded read of each physical file, not an atomic filesystem transaction.
 use anyhow::{Context, Result, bail};
+use rayon::ThreadPool;
+use rayon::prelude::*;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -262,16 +264,35 @@ impl Drop for InputGuard {
 }
 
 impl InputGuard {
+    #[cfg(test)]
     pub(crate) fn capture(
         args: &crate::Args,
         scope: &ProjectScope,
         titles: &HashMap<String, String>,
         state: &Value,
     ) -> Result<Self> {
-        let rollouts = selected_rollouts(scope)
-            .into_iter()
-            .map(|path| Ok((path.clone(), capture_snapshot(&path)?)))
-            .collect::<Result<_>>()?;
+        Self::capture_in_pool(args, scope, titles, state, None)
+    }
+
+    // An optional, separately bounded I/O pool avoids oversubscribing disks
+    // with the (potentially much larger) session-parse worker count. Tests and
+    // single-threaded callers retain the exact sequential verification path.
+    pub(crate) fn capture_in_pool(
+        args: &crate::Args,
+        scope: &ProjectScope,
+        titles: &HashMap<String, String>,
+        state: &Value,
+        pool: Option<&ThreadPool>,
+    ) -> Result<Self> {
+        let paths = selected_rollouts(scope);
+        let capture = |path: &PathBuf| -> Result<(PathBuf, RolloutSnapshot)> {
+            Ok((path.clone(), capture_snapshot(path)?))
+        };
+        let captured: Vec<Result<(PathBuf, RolloutSnapshot)>> = match pool {
+            Some(pool) => pool.install(|| paths.par_iter().map(capture).collect()),
+            None => paths.iter().map(capture).collect(),
+        };
+        let rollouts: BTreeMap<_, _> = captured.into_iter().collect::<Result<_>>()?;
         let guard = Self {
             rollouts,
             titles: selected_titles(scope, titles),
@@ -304,7 +325,16 @@ impl InputGuard {
         Ok(guard)
     }
 
+    #[cfg(test)]
     pub(crate) fn verify(self, args: &crate::Args) -> Result<()> {
+        self.verify_in_pool(args, None)
+    }
+
+    pub(crate) fn verify_in_pool(
+        self,
+        args: &crate::Args,
+        pool: Option<&ThreadPool>,
+    ) -> Result<()> {
         // This lookup also rejects stale sidebar targets, while tolerating
         // edits to unrelated menu entries and drafts.
         let state = project_membership::read_stable_state(&crate::project_state_path(args))?;
@@ -354,10 +384,8 @@ impl InputGuard {
             bail!("本次快照內的實體 Rollout 歸屬已變更；尚未覆寫 Handoff");
         }
 
-        let mut appended_files = 0usize;
-        let mut appended_bytes = 0u64;
-        for path in paths {
-            let captured = self.rollouts.get(&path).expect("captured path");
+        let check = |path: &PathBuf| -> Result<u64> {
+            let captured = self.rollouts.get(path).expect("captured path");
             let current_len = crate::open_shared_read(&path)?
                 .metadata()
                 .with_context(|| format!("再次讀取 Session {}", path.display()))?
@@ -382,9 +410,19 @@ impl InputGuard {
                     path.display()
                 );
             }
-            if current_len > captured.len {
+            Ok(current_len - captured.len)
+        };
+        let checked: Vec<Result<u64>> = match pool {
+            Some(pool) => pool.install(|| paths.par_iter().map(check).collect()),
+            None => paths.iter().map(check).collect(),
+        };
+        let mut appended_files = 0usize;
+        let mut appended_bytes = 0u64;
+        for appended in checked {
+            let appended = appended?;
+            if appended > 0 {
                 appended_files += 1;
-                appended_bytes = appended_bytes.saturating_add(current_len - captured.len);
+                appended_bytes = appended_bytes.saturating_add(appended);
             }
         }
         // Display titles may be updated or temporarily unavailable while
@@ -415,6 +453,7 @@ mod tests {
     use super::*;
     use clap::Parser;
     use std::fs;
+    use std::io::Write;
     // The production product mode has one export per process. Keep the guard
     // tests serial because attachment observation is process-wide by design.
     static TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -475,6 +514,51 @@ mod tests {
                 .unwrap();
         let titles = crate::read_title_index(&args.session_index).unwrap();
         InputGuard::capture(args, &scope, &titles, &state).unwrap()
+    }
+
+    #[test]
+    fn bounded_parallel_capture_and_verify_preserve_append_and_rewrite_checks() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, mut files) = fixture();
+        let state_path = crate::project_state_path(&args);
+        let mut state = project_membership::read_stable_state(&state_path).unwrap();
+        for i in 0..12 {
+            let id = format!("extra-target-{i}");
+            let path = args.sessions_root.join(format!("rollout-{id}.jsonl"));
+            fs::write(&path, meta(&id, "D:\\target")).unwrap();
+            state["thread-project-assignments"][&id] = serde_json::json!({"projectId":"target"});
+            files.push(path);
+        }
+        fs::write(&state_path, state.to_string()).unwrap();
+        let scope =
+            project_membership::resolve_state(&files, &state, "", args.project_id.as_deref())
+                .unwrap();
+        let titles = crate::read_title_index(&args.session_index).unwrap();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(4)
+            .build()
+            .unwrap();
+
+        let guard =
+            InputGuard::capture_in_pool(&args, &scope, &titles, &state, Some(&pool)).unwrap();
+        let selected = selected_rollouts(&scope);
+        assert_eq!(selected.len(), 13);
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&selected[3])
+            .unwrap()
+            .write_all(b"{\"type\":\"event_msg\",\"payload\":{}}\n")
+            .unwrap();
+        guard.verify_in_pool(&args, Some(&pool)).unwrap();
+
+        let guard =
+            InputGuard::capture_in_pool(&args, &scope, &titles, &state, Some(&pool)).unwrap();
+        // Same-length prefix rewrite must not evade parallel revalidation.
+        let original = fs::read(&selected[4]).unwrap();
+        let mut rewritten = original.clone();
+        rewritten[1] ^= 1;
+        fs::write(&selected[4], rewritten).unwrap();
+        assert!(guard.verify_in_pool(&args, Some(&pool)).is_err());
     }
 
     #[test]

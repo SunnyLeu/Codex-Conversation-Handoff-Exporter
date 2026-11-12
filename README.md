@@ -5,6 +5,19 @@
 
 這是非官方社群專案，並非 OpenAI 的產品，也未獲 OpenAI 背書。
 
+## 2.2.0 更新摘要（2026-11-12）
+
+`2.2.0` 新增 Codex 非同步使用者輸入的結構化回答關聯，並改善既有 Handoff 覆寫、來源驗證與資料清理的執行效率。既有的來源完整性、目的地歸屬保護、完整重建與不中斷 Codex 的操作原則均維持。
+
+- **確認非同步問答的實際回答**：將已驗證的 `<send_user_message_question_reply>` 使用者訊息關聯至 `request_user_input_async`，保留題目索引、回答文字、來源訊息識別及可取得的時間；區分 `answered`、`partially_answered`、`response_conflict` 與未回答狀態，不以工具回執冒充回答。原始訊息保持不變。
+- **降低既有 Handoff 驗證成本**：僅擷取必要的頂層對話身分，但仍完整檢查 JSON 及既有輸出安全條件，拒絕損壞、異身分與不安全的目的地檔案。
+- **改善來源核對與大型資料清理**：對來源快照及寫入前重驗採有界併行處理，並改善候選 JSON 釋放與進度執行緒結束方式；不取消前綴 SHA-256、來源改寫／截斷或附件保護。
+- **擴充階段計時**：新增來源快照、重驗、目的地檢查與資料清理等指標，便於後續效能分析。
+
+Windows 11 x64 驗收已通過 **246 項 Rust 測試、8 組合成 EXE 端到端測試、子代理整合、42 項 Schema 事實與 13 項附件檢查**。兩個真實專案各以兩批、每版本合計六次重複覆寫測試，比較 2.1.0 的平均外部耗時分別降低 **23.50%** 與 **24.08%**；此為特定環境的量測結果，不代表所有電腦都會得到相同幅度。匯出成功與數量相同不等於已對所有真實 Handoff 完成逐份語意核對。
+
+詳細內容請參閱 [2.2.0 變更說明](CHANGES-2.2.0.md) 與 [Schema 契約](SCHEMA-CONTRACT.md)。
+
 ## 2.1.0 更新摘要（2026-10-30）
 
 `2.1.0` 著重於**對話內容可追溯、來源附件保真，以及不中斷 Codex 的安全匯出**。使用方式與原有 Windows x64 主控台操作維持相同。
@@ -37,7 +50,7 @@ Windows x64 實測：**241 項 Rust 測試通過**、原有 **7 組 EXE 端到�
 在本儲存庫的 [Releases](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/releases)
 下載 Windows x64 套件：
 
-`Codex-Conversation-Handoff-Exporter-2.1.0-windows-x64.zip`
+`Codex-Conversation-Handoff-Exporter-2.2.0-windows-x64.zip`
 
 解壓後執行 `Codex-Conversation-Handoff-Exporter.exe`。
 EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔，可以移至自己偏好的位置。
@@ -45,7 +58,7 @@ EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔�
 Windows 自帶的系統 DLL 仍為必要元件。重新散布時請保留套件內的授權聲明。
 
 **平台範圍：僅支援 Windows x64（x86-64／AMD64）。**
-2.1.0 已在 Windows 11 x64 完成驗收。不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
+2.2.0 已在 Windows 11 x64 完成驗收。不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
 其他 Windows 版本尚未完成驗證。EXE、Codex 資料、系統暫存目錄與輸出位置仍受 Windows 存取權限限制。
 
 ## 基本操作

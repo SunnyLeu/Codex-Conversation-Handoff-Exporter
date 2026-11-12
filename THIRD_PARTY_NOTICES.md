@@ -1,7 +1,7 @@
-# Third-party notices — Codex Conversation Handoff Exporter 2.1.0
+# Third-party notices — Codex Conversation Handoff Exporter 2.2.0
 
 The application is MIT-licensed; each dependency retains its own license.
-The package-version inventory is reconciled to the pinned 2.1.0 Cargo.lock.
+The package-version inventory is reconciled to the pinned 2.2.0 Cargo.lock.
 It includes target-specific and build-only crates; grouped third-party license texts are retained.
 
 ## Zstandard and native code

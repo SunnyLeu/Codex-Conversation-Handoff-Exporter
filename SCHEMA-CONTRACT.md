@@ -1,10 +1,10 @@
-# 2.1.0 輸出契約
+# 2.2.0 輸出契約（延續 2.1.0 的 Schema 1.0）
 
 相對基線為 2.0.3 / c0d30b6d86d33e8a80bb6bf7785b6a664fdf7a97。R9 已在 Windows x64 完成 241 項 Rust、既有 7 組 EXE 與 1 組子代理 EXE、42 項 Schema 事實及附件／快照檢查。這是已觀測來源格式的工具輸出契約，不是完整無損保證。
 
 ## 1. 相容與範圍
 
-既有 messages、turns、activities、requests、子代理、附件還原、專案歸屬與 N/N 重寫維持原有流程。新增 `handoff_schema_version="1.0"`；`exporter_version="2.1.0"` 仍是程式版本。子代理各自保存 local-history 的來源觀測；不因新欄位加入 Guardian 為一般對話、不重新啟用封存目錄或從別條對話複製 messages。
+既有 messages、turns、activities、requests、子代理、附件還原、專案歸屬與 N/N 重寫維持原有流程。新增 `handoff_schema_version="1.0"`；`exporter_version` 反映各次執行的程式版本；2.1.0 原輸出使用 `2.1.0`，2.2.0 輸出使用 `2.2.0`。子代理各自保存 local-history 的來源觀測；不因新欄位加入 Guardian 為一般對話、不重新啟用封存目錄或從別條對話複製 messages。
 
 這不是所有 Codex 版本的完整標準，也不是任意 JSON 的無損備份。以 2026-10-29 提供的原始樣本建立已觀測版型，未知內容維持可見且待評估。
 
@@ -90,3 +90,16 @@ R9 的 Windows x64 完整驗收已通過：241 項 Rust 單元測試、原有 7 
 ## R8 source_snapshot 欄位與快照語意
 
 Root Handoff 與有實體來源的 Subagent 可包含 `source_snapshot`，其中 `mode=selected_physical_files_with_fixed_byte_limits`，`physical_files[*]` 帶有 `path`、`captured_bytes`、`source_sha256` 及 `byte_scope`。`physical_jsonl_prefix` 表示限制讀取到已選實體 `.jsonl` 的固定 byte 位置；`compressed_physical_file` 表示已核對的 `.jsonl.zst` 完整檔案。`later_appends_and_new_files=excluded_until_next_export`，不應解讀為 Codex 已停止寫入。`consistency=per_file_verified_prefix_not_atomic_cross_file_snapshot` 表示各實體檔案的前綴獨立驗證，不保證跨檔案原子時間點。`source_sha256` 是來源檔起始截取 bytes 的身分，不是 Handoff 訊息或整份多檔原子快照的雜湊。
+
+## 2.2.0：`request_user_input_async` 的使用者回答關聯
+
+來源中已驗證的 `item_completed.UserMessage` 可能含有 `<send_user_message_question_reply>` 包覆的 JSON 陣列。只有 `questionItemId` 可精確解碼為 `['request_user_input_async', call_id, question_index]`，且該 call_id 唯一對應同 Session 中一個 async 請求、題目索引存在、包覆資料的 `question` 與原請求 `questions[index].title`／`question` **完全一致**、`answer` 非空白，才新增關聯。非驗證 UserMessage、缺失 call、重複 call、不同題目、同步請求、已拒絕投遞或無法解析的外層皆不宣稱已回答。
+
+成功關聯後，`user_input_requests[*]` 增加：
+
+- `response_format: "send_user_message_question_reply"`。
+- `responses[*]`：`question_index`（從零開始）、`question`、`answer`、`source_message_id`、`source_item_id`，以及來源有提供時的 `answered_at`。
+- 全部題目都有唯一答案時 `status: "answered"`，並於可取得時間時填入請求層 `answered_at`；僅部分題目有證據時 `status: "partially_answered"`。
+- 同一題出現相互衝突的不同答案時 `status: "response_conflict"`，以 `conflicting_question_indexes` 標示歧義題目，不替該題選擇答案；其他無歧義回答仍可保留。
+
+來源原本的 `messages[].content` 不變。工具輸出中的 `accepted=true` 是投遞成功回執，**不能視為使用者回答**。既有 `handoff_schema_version: "1.0"` 保留；這些是附加欄位，不刪除舊有欄位。輸出語意是已觀測、可核對的關聯，不是全面的未來工具格式保證。

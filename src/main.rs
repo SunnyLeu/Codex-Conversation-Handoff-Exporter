@@ -15462,6 +15462,193 @@ fn enrich_session_from_records(
 // Root/subagent aggregation, handoff construction and output
 // ---------------------------------------------------------------------------
 
+/// A verified Codex `item_completed.UserMessage` may carry the answers to an
+/// earlier `request_user_input_async`. Delivery acknowledgments are *not*
+/// answers. Only an exact call ID, question index and question text establish
+/// the relationship; preserve the original user message as evidence.
+fn link_async_question_replies(requests: &mut [Value], messages: &[Value]) {
+    use std::collections::BTreeMap;
+
+    // A duplicated request ID is ambiguous even if both records look similar.
+    let mut request_by_call = HashMap::<String, usize>::new();
+    let mut ambiguous_calls = HashSet::<String>::new();
+    for (request_index, request) in requests.iter().enumerate() {
+        if request.get("request_mode").and_then(Value::as_str) != Some("async") {
+            continue;
+        }
+        let Some(call_id) = request.get("call_id").and_then(Value::as_str) else {
+            continue;
+        };
+        if request_by_call
+            .insert(call_id.to_string(), request_index)
+            .is_some()
+        {
+            ambiguous_calls.insert(call_id.to_string());
+        }
+    }
+
+    // (request index, question index) -> (source message, original answer).
+    let mut proven = BTreeMap::<(usize, usize), Value>::new();
+    let mut conflicts = HashSet::<(usize, usize)>::new();
+    for message in messages {
+        if message.get("role").and_then(Value::as_str) != Some("user")
+            || message.get("message_origin").and_then(Value::as_str)
+                != Some("item_completed.UserMessage")
+        {
+            continue;
+        }
+        let Some(source_message_id) = message.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(source_item_id) = message.get("source_item_id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(content) = message.get("content").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(body) = content
+            .trim()
+            .strip_prefix("<send_user_message_question_reply>")
+            .and_then(|text| text.strip_suffix("</send_user_message_question_reply>"))
+        else {
+            continue;
+        };
+        let Ok(Value::Array(entries)) = serde_json::from_str::<Value>(body.trim()) else {
+            continue;
+        };
+        for entry in entries {
+            let Some(entry) = entry.as_object() else {
+                continue;
+            };
+            let (Some(identifier), Some(question), Some(answer)) = (
+                entry.get("questionItemId").and_then(Value::as_str),
+                entry.get("question").and_then(Value::as_str),
+                entry.get("answer").and_then(Value::as_str),
+            ) else {
+                continue;
+            };
+            if answer.trim().is_empty() {
+                continue;
+            }
+            let Ok(Value::Array(parts)) = serde_json::from_str::<Value>(identifier) else {
+                continue;
+            };
+            if parts.len() != 3 || parts[0].as_str() != Some("request_user_input_async") {
+                continue;
+            }
+            let Some(call_id) = parts[1].as_str() else {
+                continue;
+            };
+            let Some(question_index) = parts[2].as_u64().and_then(|i| usize::try_from(i).ok())
+            else {
+                continue;
+            };
+            if ambiguous_calls.contains(call_id) {
+                continue;
+            }
+            let Some(&request_index) = request_by_call.get(call_id) else {
+                continue;
+            };
+            let request = &requests[request_index];
+            if request.get("accepted").and_then(Value::as_bool) == Some(false) {
+                continue;
+            }
+            let Some(expected_question) = request
+                .get("questions")
+                .and_then(Value::as_array)
+                .and_then(|questions| questions.get(question_index))
+                .and_then(|item| item.get("title").or_else(|| item.get("question")))
+                .and_then(Value::as_str)
+            else {
+                continue;
+            };
+            if question != expected_question {
+                continue;
+            }
+
+            let mut response = obj!(
+                "question_index" => Value::Number((question_index as u64).into()),
+                "question" => Value::String(question.to_string()),
+                "answer" => Value::String(answer.to_string()),
+                "source_message_id" => Value::String(source_message_id.to_string()),
+                "source_item_id" => Value::String(source_item_id.to_string()),
+            );
+            if let Some(timestamp) = message.get("create_time").and_then(Value::as_str) {
+                response.insert(
+                    "answered_at".to_string(),
+                    Value::String(timestamp.to_string()),
+                );
+            }
+            let key = (request_index, question_index);
+            if let Some(existing) = proven.get(&key) {
+                if existing.get("answer") != response.get("answer") {
+                    conflicts.insert(key);
+                }
+            } else {
+                proven.insert(key, Value::Object(response));
+            }
+        }
+    }
+
+    for (request_index, request) in requests.iter_mut().enumerate() {
+        let Some(request) = request.as_object_mut() else {
+            continue;
+        };
+        if value_str(request.get("request_mode")) != Some("async") {
+            continue;
+        }
+        let question_count = request
+            .get("questions")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len);
+        if question_count == 0 {
+            continue;
+        }
+        let mut responses = Vec::new();
+        let mut conflicting_indexes = Vec::new();
+        for index in 0..question_count {
+            let key = (request_index, index);
+            if conflicts.contains(&key) {
+                conflicting_indexes.push(Value::Number((index as u64).into()));
+            } else if let Some(value) = proven.remove(&key) {
+                responses.push(value);
+            }
+        }
+        if responses.is_empty() && conflicting_indexes.is_empty() {
+            continue;
+        }
+        let status = if !conflicting_indexes.is_empty() {
+            "response_conflict"
+        } else if responses.len() == question_count {
+            "answered"
+        } else {
+            "partially_answered"
+        };
+        let latest_answered_at = responses
+            .iter()
+            .filter_map(|response| response.get("answered_at").and_then(Value::as_str))
+            .max()
+            .map(str::to_string);
+        request.insert("status".to_string(), Value::String(status.to_string()));
+        request.insert(
+            "response_format".to_string(),
+            Value::String("send_user_message_question_reply".to_string()),
+        );
+        request.insert("responses".to_string(), Value::Array(responses));
+        if !conflicting_indexes.is_empty() {
+            request.insert(
+                "conflicting_question_indexes".to_string(),
+                Value::Array(conflicting_indexes),
+            );
+        }
+        if status == "answered" {
+            if let Some(timestamp) = latest_answered_at {
+                request.insert("answered_at".to_string(), Value::String(timestamp));
+            }
+        }
+    }
+}
+
 fn append_session_payload(output: &mut Obj, session: &Session) {
     #[cfg(feature = "integrated-study")]
     let _study_scope = integrated_study::scope(31, 0);
@@ -15507,7 +15694,11 @@ fn append_session_payload(output: &mut Obj, session: &Session) {
         ("changes", &session.changes),
     ] {
         if !values.is_empty() {
-            output.insert(key.to_string(), Value::Array(values.clone()));
+            let mut projected = values.clone();
+            if key == "user_input_requests" {
+                link_async_question_replies(&mut projected, &session.messages);
+            }
+            output.insert(key.to_string(), Value::Array(projected));
         }
     }
     if let Some(value) = session.delegation.as_ref() {
@@ -15519,6 +15710,7 @@ fn append_session_payload(output: &mut Obj, session: &Session) {
 // final handoff instead of deeply cloning them. Metadata required by export
 // bookkeeping stays in Session, including session IDs and subagent IDs.
 fn append_session_payload_move(output: &mut Obj, session: &mut Session) {
+    link_async_question_replies(&mut session.user_input_requests, &session.messages);
     if let Some(Value::Object(values)) = session.schema_info.take() {
         output.extend(values);
     }
@@ -17124,6 +17316,14 @@ struct RunMetrics {
     total: Duration,
     title_index: Duration,
     project_membership: Duration,
+    destination_preflight_initial: Duration,
+    source_guard_pool_setup: Duration,
+    source_snapshot: Duration,
+    continuation_prepare: Duration,
+    source_verify: Duration,
+    destination_preflight_final: Duration,
+    candidate_teardown: Duration,
+    progress_teardown: Duration,
     result_collection: Duration,
     integration_only: Duration,
     build_only: Duration,
@@ -17268,6 +17468,7 @@ fn build_all_candidates(
     // output write/delete if the Codex project registry is unavailable or
     // inconsistent. Historical test fixtures must opt into legacy mode.
     let membership_start = Instant::now();
+    let mut destination_preflight_initial = Duration::ZERO;
     if write_outputs {
         destination::validate_path(&args.output_directory, args)?;
     }
@@ -17320,7 +17521,9 @@ fn build_all_candidates(
             }
         }
         if write_outputs {
+            let preflight_start = Instant::now();
             ensure_existing_handoffs_belong_to_scope(&args.output_directory, &scope)?;
+            destination_preflight_initial = preflight_start.elapsed();
         }
         println!(
             "Project membership: {} explicit roots, {} CWD fallback roots, {} children, {} Guardian; {} metadata-free rollout(s)",
@@ -17345,20 +17548,43 @@ fn build_all_candidates(
     };
 
     let project_membership_time = membership_start.elapsed();
+    // Source snapshot hashing and the final hash comparison are independent
+    // per physical file. Use a small, reusable pool for these disk-bound
+    // operations, not the wider CPU-oriented session parsing pool.
+    let guard_pool_start = Instant::now();
+    let guard_pool = if args.product_mode
+        && project_scope
+            .as_ref()
+            .is_some_and(|scope| scope.selected_ids.len() >= 8)
+    {
+        Some(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(args.workers.clamp(1, 4))
+                .thread_name(|index| format!("codex-source-{index}"))
+                .build()?,
+        )
+    } else {
+        None
+    };
+    let source_guard_pool_setup = guard_pool_start.elapsed();
     // Capture exactly the selected project's physical source identity before
     // conversion. Unrelated active Codex threads must not invalidate this run.
+    let snapshot_start = Instant::now();
     let input_guard = if args.product_mode {
-        Some(source_guard::InputGuard::capture(
+        Some(source_guard::InputGuard::capture_in_pool(
             args,
             project_scope
                 .as_ref()
                 .expect("product mode resolves a scope"),
             &title_index,
             &project_membership::read_stable_state(&project_state_path(args))?,
+            guard_pool.as_ref(),
         )?)
     } else {
         None
     };
+    let source_snapshot = snapshot_start.elapsed();
+    let continuation_start = Instant::now();
     // Materialize only confirmed multi-file continuations as isolated,
     // ephemeral logical rollouts. This occurs before any output write/delete.
     // No Codex source rollout is renamed, removed or edited.
@@ -17387,6 +17613,7 @@ fn build_all_candidates(
         project_scope.as_ref().map(|scope| &scope.selected_ids),
         project_scope.as_ref().map(|scope| &scope.continuation_ids),
     )?;
+    let continuation_prepare = continuation_start.elapsed();
     let physical_rollout_count = scan_inputs.len();
     let files = &prepared_rollouts.files;
     if prepared_rollouts.merged_count > 0 {
@@ -17684,15 +17911,20 @@ fn build_all_candidates(
         Duration::ZERO
     };
 
+    let source_verify_start = Instant::now();
     if let Some(guard) = input_guard {
-        guard.verify(args)?;
+        guard.verify_in_pool(args, guard_pool.as_ref())?;
     }
+    drop(guard_pool);
+    let source_verify = source_verify_start.elapsed();
+    let destination_preflight_start = Instant::now();
     if write_outputs {
         destination::validate_path(&args.output_directory, args)?;
         if let Some(scope) = &project_scope {
             ensure_existing_handoffs_belong_to_scope(&args.output_directory, scope)?;
         }
     }
+    let destination_preflight_final = destination_preflight_start.elapsed();
     progress::stage("準備寫入檔案", 0);
     let export_start = Instant::now();
     let mut output_bytes = 0u64;
@@ -17815,6 +18047,17 @@ fn build_all_candidates(
     if integrated_study::enabled() {
         pool.broadcast(|_| integrated_study::drain_thread());
     }
+    // Product mode no longer needs the built JSON after a successful write.
+    // Release it through the still-live worker pool instead of transferring
+    // hundreds of large values to the UI for a serial teardown afterwards.
+    // Engineering/no-write paths still return the full candidates for semantic
+    // comparison and existing regression tests.
+    let candidate_teardown_start = Instant::now();
+    if args.product_mode && write_outputs {
+        let owned = std::mem::take(&mut candidates);
+        pool.install(|| owned.into_par_iter().for_each(drop));
+    }
+    let candidate_teardown = candidate_teardown_start.elapsed();
     // r7 measured the candidate wall before destroying the original Session
     // graphs and Rayon pool. Account for both teardown steps explicitly;
     // the real external process clock has always included them.
@@ -17833,6 +18076,14 @@ fn build_all_candidates(
             total,
             title_index: title_index_time,
             project_membership: project_membership_time,
+            destination_preflight_initial,
+            source_guard_pool_setup,
+            source_snapshot,
+            continuation_prepare,
+            source_verify,
+            destination_preflight_final,
+            candidate_teardown,
+            progress_teardown: Duration::ZERO,
             result_collection: result_collection_time,
             integration_only,
             build_only,
@@ -17954,6 +18205,34 @@ fn print_metrics(metrics: &RunMetrics) {
     println!(
         "Project resolver time: {:.6} s",
         metrics.project_membership.as_secs_f64()
+    );
+    println!(
+        "  Initial destination preflight (included above): {:.6} s",
+        metrics.destination_preflight_initial.as_secs_f64()
+    );
+    println!(
+        "Source pool setup time: {:.6} s",
+        metrics.source_guard_pool_setup.as_secs_f64()
+    );
+    println!(
+        "Source snapshot time: {:.6} s",
+        metrics.source_snapshot.as_secs_f64()
+    );
+    println!(
+        "Continuation preparation time: {:.6} s",
+        metrics.continuation_prepare.as_secs_f64()
+    );
+    println!(
+        "Source revalidation time: {:.6} s",
+        metrics.source_verify.as_secs_f64()
+    );
+    println!(
+        "Final destination preflight time: {:.6} s",
+        metrics.destination_preflight_final.as_secs_f64()
+    );
+    println!(
+        "Candidate teardown time: {:.6} s",
+        metrics.candidate_teardown.as_secs_f64()
     );
     println!(
         "Result collection time: {:.6} s",
@@ -20262,6 +20541,182 @@ text(r);"#;
             value_str(request.get("answered_at")),
             Some("2026-08-19T00:00:02.456+00:00")
         );
+    }
+
+    #[test]
+    fn async_question_reply_links_exact_questions_and_preserves_original_message() {
+        let call = "call-verified";
+        let question_id = |index| {
+            serde_json::to_string(&serde_json::json!([
+                "request_user_input_async",
+                call,
+                index
+            ]))
+            .unwrap()
+        };
+        let wrapper = format!(
+            "<send_user_message_question_reply>\n{}\n</send_user_message_question_reply>",
+            serde_json::json!([
+                {"questionItemId":question_id(0), "question":"允許執行？", "answer":"允許"},
+                {"questionItemId":question_id(1), "question":"指定版本？", "answer":"2.2.0"}
+            ])
+        );
+        let message = serde_json::json!({
+            "id":"u02", "role":"user", "message_origin":"item_completed.UserMessage",
+            "source_item_id":"msg-verified", "create_time":"2026-11-12T02:20:37Z",
+            "content":wrapper
+        });
+        let original = message.clone();
+        let mut requests = vec![serde_json::json!({
+            "call_id":call, "request_mode":"async", "status":"awaiting_response",
+            "accepted":true, "acknowledged_at":"2026-11-12T02:20:08Z",
+            "questions":[{"title":"允許執行？"},{"title":"指定版本？"}]
+        })];
+        link_async_question_replies(&mut requests, &[message.clone()]);
+        assert_eq!(message, original);
+        let request = &requests[0];
+        assert_eq!(request["status"], "answered");
+        assert_eq!(
+            request["response_format"],
+            "send_user_message_question_reply"
+        );
+        assert_eq!(request["acknowledged_at"], "2026-11-12T02:20:08Z");
+        assert_eq!(request["answered_at"], "2026-11-12T02:20:37Z");
+        assert_eq!(request["responses"][0]["answer"], "允許");
+        assert_eq!(request["responses"][0]["question_index"], 0);
+        assert_eq!(request["responses"][1]["answer"], "2.2.0");
+        assert_eq!(request["responses"][1]["source_message_id"], "u02");
+        assert_eq!(request["responses"][1]["source_item_id"], "msg-verified");
+    }
+
+    #[test]
+    fn async_question_reply_partial_conflict_and_unverified_are_not_invented() {
+        let reply = |id: &str, tool: &str, call: &str, question: &str, answer: &str, index: u64| {
+            serde_json::json!({
+                "id":id,"role":"user","message_origin":"item_completed.UserMessage",
+                "source_item_id":format!("item-{id}"),
+                "content":format!(
+                    "<send_user_message_question_reply>\n{}\n</send_user_message_question_reply>",
+                    serde_json::json!([{
+                        "questionItemId":serde_json::to_string(&serde_json::json!([tool,call,index])).unwrap(),
+                        "question":question,"answer":answer
+                    }])
+                )
+            })
+        };
+        let mut requests = vec![
+            serde_json::json!({
+                "call_id":"call-one","request_mode":"async","status":"awaiting_response",
+                "questions":[{"title":"Q1"},{"title":"Q2"}]
+            }),
+            serde_json::json!({
+                "call_id":"call-sync","status":"answered", "questions":[{"title":"Q1"}]
+            }),
+            serde_json::json!({
+                "call_id":"call-rejected","request_mode":"async", "accepted":false,
+                "status":"delivery_rejected", "questions":[{"title":"Q1"}]
+            }),
+        ];
+        let messages = vec![
+            reply(
+                "unmatched",
+                "request_user_input_async",
+                "call-one",
+                "WRONG",
+                "ignored",
+                0,
+            ),
+            reply(
+                "wrong-kind",
+                "request_user_input",
+                "call-one",
+                "Q1",
+                "ignored",
+                0,
+            ),
+            reply(
+                "real",
+                "request_user_input_async",
+                "call-one",
+                "Q1",
+                "answer-one",
+                0,
+            ),
+            reply(
+                "sync",
+                "request_user_input_async",
+                "call-sync",
+                "Q1",
+                "ignored",
+                0,
+            ),
+            reply(
+                "rejected",
+                "request_user_input_async",
+                "call-rejected",
+                "Q1",
+                "ignored",
+                0,
+            ),
+        ];
+        link_async_question_replies(&mut requests, &messages);
+        assert_eq!(requests[0]["status"], "partially_answered");
+        assert_eq!(requests[0]["responses"].as_array().unwrap().len(), 1);
+        assert!(requests[0].get("answered_at").is_none());
+        assert!(requests[1].get("responses").is_none());
+        assert_eq!(requests[2]["status"], "delivery_rejected");
+
+        let conflict = reply(
+            "different",
+            "request_user_input_async",
+            "call-one",
+            "Q1",
+            "answer-two",
+            0,
+        );
+        link_async_question_replies(&mut requests, &[messages[2].clone(), conflict]);
+        assert_eq!(requests[0]["status"], "response_conflict");
+        assert_eq!(
+            requests[0]["conflicting_question_indexes"],
+            serde_json::json!([0])
+        );
+        assert!(requests[0]["responses"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn async_question_reply_immutable_and_move_builders_match() {
+        let mut session = guardian_test_session(
+            "root-async",
+            "root-async",
+            "user",
+            None,
+            false,
+            "2026-11-12T02:20:37Z",
+            "idle",
+        );
+        let identifier = serde_json::to_string(&serde_json::json!([
+            "request_user_input_async",
+            "call-a",
+            0
+        ]))
+        .unwrap();
+        session.messages.push(serde_json::json!({
+            "id":"u02","role":"user", "message_origin":"item_completed.UserMessage",
+            "source_item_id":"item-02", "content":format!(
+                "<send_user_message_question_reply>\n{}\n</send_user_message_question_reply>",
+                serde_json::json!([{"questionItemId":identifier,"question":"Q?","answer":"A!"}])
+            )
+        }));
+        session.user_input_requests.push(serde_json::json!({
+            "call_id":"call-a", "request_mode":"async", "status":"awaiting_response",
+            "questions":[{"title":"Q?"}]
+        }));
+        let original_message = session.messages[0].clone();
+        let (_, immutable) = build_handoff(&session, &HashMap::new()).unwrap();
+        let (_, moved) = build_handoff_move(&mut session, &HashMap::new()).unwrap();
+        assert_eq!(immutable, moved);
+        assert_eq!(moved["user_input_requests"][0]["status"], "answered");
+        assert_eq!(moved["messages"][0], original_message);
     }
 
     #[test]

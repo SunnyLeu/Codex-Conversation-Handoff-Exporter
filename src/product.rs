@@ -404,8 +404,11 @@ fn execute(
     let reporter = crate::progress::Reporter::start(screen.ansi, visual);
     let began = Instant::now();
     let result = crate::build_all_candidates(args, true);
+    let progress_finish_start = Instant::now();
     reporter.finish();
-    let (candidates, metrics) = result?;
+    let progress_teardown = progress_finish_start.elapsed();
+    let (candidates, mut metrics) = result?;
+    metrics.progress_teardown = progress_teardown;
     if metrics.scan_errors > 0
         || metrics.export_errors > 0
         || metrics.outputs_rewritten != metrics.root_conversations
@@ -416,7 +419,11 @@ fn execute(
             metrics.root_conversations
         );
     }
+    let candidate_finish_start = Instant::now();
     drop(candidates);
+    // Normally zero for product exports: large candidate trees have already
+    // been disposed of in parallel before the builder releases its worker pool.
+    metrics.candidate_teardown += candidate_finish_start.elapsed();
     let elapsed = began.elapsed().as_secs_f64();
     screen.header("匯出結果");
     screen.status("成功", "對話匯出完成", 92);
