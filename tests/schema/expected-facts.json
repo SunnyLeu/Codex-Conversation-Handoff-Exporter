@@ -12,7 +12,7 @@
       "name": "new exporter version",
       "path": "/exporter_version",
       "mode": "contains",
-      "value": "2.1.0"
+      "value": "2.2.0"
     },
     {
       "name": "one root selected",

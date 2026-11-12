@@ -1,6 +1,6 @@
 # 2.2.0 變更說明
 
-基準為正式版本 2.1.0（Git commit `e6844394b52e5270dbe9321672ea2a870d3606b8`）。2.2.0 已通過 Windows R4 自動化驗收與指定真實專案的效能實測；GitHub Tag／Release 的正式發布狀態以儲存庫公開紀錄為準。
+基準為正式版本 2.1.0（Git commit `e6844394b52e5270dbe9321672ea2a870d3606b8`）。2.2.0 已通過 Windows R5（包含 Dependabot PR #7 相依套件）自動化驗收；指定真實專案的效能實測於相依套件更新前的 R4 執行檔完成。GitHub Tag／Release 的正式發布狀態以儲存庫公開紀錄為準。
 
 ## 1. Codex 非同步問答整理
 
@@ -26,3 +26,10 @@
 - 在兩個真實 Windows 專案中，使用 2.1.0 與 2.2.0 各六次正式覆寫量測（另有預熱），平均外部耗時分別降低 23.50% 與 24.08%。這是所測資料、磁碟快取與背景負載條件下的觀測，不是普遍效能保證。
 - 尚未取得所有真實 Handoff 的逐份 JSON 語意比對結果，因此不宣稱已對完整資料集證實所有內容完全一致；2.2.0 的新增結構化回答欄位本來就可能造成預期的輸出差異。
 - `handoff_schema_version` 仍為 `1.0`；既有來源完整性、目的地安全拒絕及來源不完整時的誠實標示不變。
+
+## 4. 第三方相依套件更新
+
+- 納入 Dependabot [PR #7](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/pull/7) 的 `Cargo.lock` 更新，涵蓋 `cc`、`itoa`、`log`、`serde_spanned`、`syn`、`toml`、`toml_datetime`、`toml_writer`、`uuid`、`winnow` 共十項套件。
+- 已同步 `THIRD_PARTY_NOTICES.md` 中的套件版本清單及授權引用；更新套件的授權文字與前版逐檔 SHA-256 一致。
+- 同步 2.2.0 的獨立 Schema 驗收契約：`tests/schema/expected-facts.json` 對 `/exporter_version` 的預期為 `2.2.0`，避免沿用舊版 `2.1.0` 預期。
+- 本次相依套件更新後，R5 已在 Windows 11 x64 重新進行完整 MSVC Release 建置與自動化驗收，35 項控制器關卡全部通過；發布用 EXE 必須採用 R5 合格建置，不能沿用 R4 執行檔。先前兩個真實專案的效能實測仍屬更新前的 R4，尚未對 R5 重新量測。

@@ -32,7 +32,7 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `block-buffer` | `0.12.1` | MIT OR Apache-2.0 |
 | `bumpalo` | `3.20.3` | MIT OR Apache-2.0 |
 | `bytes` | `1.12.1` | MIT |
-| `cc` | `1.10.0` | MIT OR Apache-2.0 |
+| `cc` | `1.11.1` | MIT OR Apache-2.0 |
 | `cfg-if` | `1.0.5` | MIT OR Apache-2.0 |
 | `chrono` | `0.4.45` | MIT OR Apache-2.0 |
 | `clap` | `4.6.7` | MIT OR Apache-2.0 |
@@ -65,11 +65,11 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `iana-time-zone-haiku` | `0.1.2` | MIT OR Apache-2.0 |
 | `indexmap` | `2.14.2` | Apache-2.0 OR MIT |
 | `is_terminal_polyfill` | `1.70.2` | MIT OR Apache-2.0 |
-| `itoa` | `1.0.18` | MIT OR Apache-2.0 |
+| `itoa` | `1.0.19` | MIT OR Apache-2.0 |
 | `jobserver` | `0.1.35` | MIT OR Apache-2.0 |
 | `js-sys` | `0.3.105` | MIT OR Apache-2.0 |
 | `libc` | `0.2.191` | MIT OR Apache-2.0 |
-| `log` | `0.4.34` | MIT OR Apache-2.0 |
+| `log` | `0.4.35` | MIT OR Apache-2.0 |
 | `memchr` | `2.8.3` | Unlicense OR MIT |
 | `munge` | `0.4.7` | MIT |
 | `munge_macro` | `0.4.7` | MIT |
@@ -101,7 +101,7 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `serde_core` | `1.0.229` | MIT OR Apache-2.0 |
 | `serde_derive` | `1.0.229` | MIT OR Apache-2.0 |
 | `serde_json` | `1.0.154` | MIT OR Apache-2.0 |
-| `serde_spanned` | `1.1.2` | MIT OR Apache-2.0 |
+| `serde_spanned` | `1.1.3` | MIT OR Apache-2.0 |
 | `sha2` | `0.11.1` | MIT OR Apache-2.0 |
 | `shlex` | `2.0.1` | MIT OR Apache-2.0 |
 | `simdutf8` | `0.1.5` | MIT OR Apache-2.0 |
@@ -111,18 +111,18 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `sonic-simd` | `0.1.4` | Apache-2.0 |
 | `strsim` | `0.11.1` | MIT |
 | `syn` | `2.0.119` | MIT OR Apache-2.0 |
-| `syn` | `3.0.9` | MIT OR Apache-2.0 |
+| `syn` | `3.0.10` | MIT OR Apache-2.0 |
 | `thiserror` | `2.0.21` | MIT OR Apache-2.0 |
 | `thiserror-impl` | `2.0.21` | MIT OR Apache-2.0 |
 | `tinyvec` | `1.13.3` | Zlib OR Apache-2.0 OR MIT |
-| `toml` | `1.1.8+spec-1.1.0` | MIT OR Apache-2.0 |
-| `toml_datetime` | `1.1.2+spec-1.1.0` | MIT OR Apache-2.0 |
+| `toml` | `1.2.1+spec-1.1.0` | MIT OR Apache-2.0 |
+| `toml_datetime` | `1.1.3+spec-1.1.0` | MIT OR Apache-2.0 |
 | `toml_parser` | `1.1.5+spec-1.1.0` | MIT OR Apache-2.0 |
-| `toml_writer` | `1.1.3+spec-1.1.0` | MIT OR Apache-2.0 |
+| `toml_writer` | `1.2.0+spec-1.1.0` | MIT OR Apache-2.0 |
 | `typenum` | `1.20.1` | MIT OR Apache-2.0 |
 | `unicode-ident` | `1.0.27` | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | `utf8parse` | `0.2.2` | Apache-2.0 OR MIT |
-| `uuid` | `1.29.0` | Apache-2.0 OR MIT |
+| `uuid` | `1.29.2` | Apache-2.0 OR MIT |
 | `version_check` | `0.9.5` | MIT/Apache-2.0 |
 | `walkdir` | `2.5.0` | Unlicense/MIT |
 | `wasip2` | `1.0.4+wasi-0.2.12` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
@@ -138,7 +138,7 @@ Rust 1.98.0 standard library: see `licenses/Rust-1.98.0-*`.
 | `windows-result` | `0.4.1` | MIT OR Apache-2.0 |
 | `windows-strings` | `0.5.1` | MIT OR Apache-2.0 |
 | `windows-sys` | `0.61.2` | MIT OR Apache-2.0 |
-| `winnow` | `1.0.4` | MIT |
+| `winnow` | `1.0.5` | MIT |
 | `winresource` | `0.1.34` | MIT |
 | `wit-bindgen` | `0.57.1` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `zerocopy` | `0.8.63` | BSD-2-Clause OR Apache-2.0 OR MIT |
@@ -956,7 +956,7 @@ limitations under the License.
 ### Text 13 (SHA-256 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3)
 
 - anyhow 1.0.104: LICENSE-MIT
-- itoa 1.0.18: LICENSE-MIT
+- itoa 1.0.19: LICENSE-MIT
 - once_cell 1.21.4: LICENSE-MIT
 - pin-project-lite 0.2.17: LICENSE-MIT
 - proc-macro2 1.0.107: LICENSE-MIT
@@ -970,7 +970,7 @@ limitations under the License.
 - serde_json 1.0.154: LICENSE-MIT
 - sonic-rs 0.5.10: licenses/serde_json/LICENSE-MIT
 - syn 2.0.119: LICENSE-MIT
-- syn 3.0.9: LICENSE-MIT
+- syn 3.0.10: LICENSE-MIT
 - thiserror 2.0.21: LICENSE-MIT
 - thiserror-impl 2.0.21: LICENSE-MIT
 - unicode-ident 1.0.27: LICENSE-MIT
@@ -1010,11 +1010,11 @@ DEALINGS IN THE SOFTWARE.
 - clap_builder 4.6.7: LICENSE-APACHE
 - clap_derive 4.6.7: LICENSE-APACHE
 - clap_lex 1.1.1: LICENSE-APACHE
-- serde_spanned 1.1.2: LICENSE-APACHE
-- toml 1.1.8+spec-1.1.0: LICENSE-APACHE
-- toml_datetime 1.1.2+spec-1.1.0: LICENSE-APACHE
+- serde_spanned 1.1.3: LICENSE-APACHE
+- toml 1.2.1+spec-1.1.0: LICENSE-APACHE
+- toml_datetime 1.1.3+spec-1.1.0: LICENSE-APACHE
 - toml_parser 1.1.5+spec-1.1.0: LICENSE-APACHE
-- toml_writer 1.1.3+spec-1.1.0: LICENSE-APACHE
+- toml_writer 1.2.0+spec-1.1.0: LICENSE-APACHE
 
 ````text
                                  Apache License
@@ -1787,7 +1787,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### Text 21 (SHA-256 378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397)
 
-- cc 1.10.0: LICENSE-MIT
+- cc 1.11.1: LICENSE-MIT
 - cfg-if 1.0.5: LICENSE-MIT
 - find-msvc-tools 0.1.15: LICENSE-MIT
 - jobserver 0.1.35: LICENSE-MIT
@@ -2247,7 +2247,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### Text 24 (SHA-256 436bc5a105d8e57dcd8778730f3754f7bf39c14d2f530e4cde4bd2d17a83ec3d)
 
-- uuid 1.29.0: LICENSE-MIT
+- uuid 1.29.2: LICENSE-MIT
 
 ````text
 Copyright (c) 2014 The Rust Project Developers
@@ -2670,7 +2670,7 @@ DEALINGS IN THE SOFTWARE.
 ### Text 32 (SHA-256 62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a)
 
 - anyhow 1.0.104: LICENSE-APACHE
-- itoa 1.0.18: LICENSE-APACHE
+- itoa 1.0.19: LICENSE-APACHE
 - libc 0.2.191: LICENSE-APACHE
 - proc-macro2 1.0.107: LICENSE-APACHE
 - quote 1.0.47: LICENSE-APACHE
@@ -2685,7 +2685,7 @@ DEALINGS IN THE SOFTWARE.
 - sonic-rs 0.5.10: licenses/LICENSE-rust
 - sonic-rs 0.5.10: licenses/serde_json/LICENSE-APACHE
 - syn 2.0.119: LICENSE-APACHE
-- syn 3.0.9: LICENSE-APACHE
+- syn 3.0.10: LICENSE-APACHE
 - thiserror 2.0.21: LICENSE-APACHE
 - thiserror-impl 2.0.21: LICENSE-APACHE
 - unicode-ident 1.0.27: LICENSE-APACHE
@@ -2890,7 +2890,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### Text 34 (SHA-256 6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb)
 
-- log 0.4.34: LICENSE-MIT
+- log 0.4.35: LICENSE-MIT
 - num-traits 0.2.19: LICENSE-MIT
 - regex 1.13.1: LICENSE-MIT
 - regex-automata 0.4.18: LICENSE-MIT
@@ -3422,11 +3422,11 @@ limitations under the License.
 - colorchoice 1.0.5: LICENSE-MIT
 - is_terminal_polyfill 1.70.2: LICENSE-MIT
 - once_cell_polyfill 1.70.2: LICENSE-MIT
-- serde_spanned 1.1.2: LICENSE-MIT
-- toml 1.1.8+spec-1.1.0: LICENSE-MIT
-- toml_datetime 1.1.2+spec-1.1.0: LICENSE-MIT
+- serde_spanned 1.1.3: LICENSE-MIT
+- toml 1.2.1+spec-1.1.0: LICENSE-MIT
+- toml_datetime 1.1.3+spec-1.1.0: LICENSE-MIT
 - toml_parser 1.1.5+spec-1.1.0: LICENSE-MIT
-- toml_writer 1.1.3+spec-1.1.0: LICENSE-MIT
+- toml_writer 1.2.0+spec-1.1.0: LICENSE-MIT
 
 ````text
 Copyright (c) Individual contributors
@@ -4426,7 +4426,7 @@ DEALINGS IN THE SOFTWARE.
 - ahash 0.8.12: LICENSE-APACHE
 - autocfg 1.5.1: LICENSE-APACHE
 - bumpalo 3.20.3: LICENSE-APACHE
-- cc 1.10.0: LICENSE-APACHE
+- cc 1.11.1: LICENSE-APACHE
 - cfg-if 1.0.5: LICENSE-APACHE
 - core-foundation-sys 0.8.7: LICENSE-APACHE
 - crossbeam-deque 0.8.8: LICENSE-APACHE
@@ -4440,7 +4440,7 @@ DEALINGS IN THE SOFTWARE.
 - indexmap 2.14.2: LICENSE-APACHE
 - jobserver 0.1.35: LICENSE-APACHE
 - js-sys 0.3.105: LICENSE-APACHE
-- log 0.4.34: LICENSE-APACHE
+- log 0.4.35: LICENSE-APACHE
 - num-traits 0.2.19: LICENSE-APACHE
 - once_cell 1.21.4: LICENSE-APACHE
 - pkg-config 0.3.34: LICENSE-APACHE
@@ -4449,7 +4449,7 @@ DEALINGS IN THE SOFTWARE.
 - regex 1.13.1: LICENSE-APACHE
 - regex-automata 0.4.18: LICENSE-APACHE
 - regex-syntax 0.8.11: LICENSE-APACHE
-- uuid 1.29.0: LICENSE-APACHE
+- uuid 1.29.2: LICENSE-APACHE
 - version_check 0.9.5: LICENSE-APACHE
 - wasip2 1.0.4+wasi-0.2.12: LICENSE-APACHE
 - wasm-bindgen 0.2.128: LICENSE-APACHE
@@ -5954,7 +5954,7 @@ THE SOFTWARE.
 
 ### Text 72 (SHA-256 cb5aedb296c5246d1f22e9099f925a65146f9f0d6b4eebba97fd27a6cdbbab2d)
 
-- winnow 1.0.4: LICENSE-MIT
+- winnow 1.0.5: LICENSE-MIT
 
 ````text
 Permission is hereby granted, free of charge, to any person obtaining
