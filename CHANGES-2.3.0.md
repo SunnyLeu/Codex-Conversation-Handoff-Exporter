@@ -18,7 +18,8 @@
 - 最低支援 Rust 改為 1.100.0，新增 `rust-toolchain.toml` 並更新 Windows CI 的對應工具鏈檢查。
 - 更新直接及間接 Cargo 相依套件，使用完整鎖定的 `Cargo.lock` 與 128 個第三方套件；包含 `sonic-rs`、`zstd`、`regex`、`clap` 等更新。未因效能猜測而更改輸出語義或放寬安全檢查。
 - 更新 Rust 標準函式庫與第三方授權聲明，包含新版 Zstandard BSD-2-Clause／BSD-3-Clause 聲明。
-- Dependabot 每日追蹤 `rust-toolchain.toml`、直接及間接 Cargo 相依套件和 GitHub Actions。Minor／Patch 可分組，Major 更新獨立交付 PR；不自動合併或發布。
+- Dependabot 每日檢查 Cargo 直接及間接相依套件與 GitHub Actions 版本；Minor／Patch 可分組，Major 更新另提 PR，不自動合併或發布。
+- `Latest Compatibility` 每日檢查最新穩定 Rust，同步 `rust-toolchain.toml` 的工具鏈版本與 `Cargo.toml` 的 `rust-version`，嘗試更新 Cargo 相依套件，再執行 Windows x64 格式、Clippy、單元、Release EXE 及合成／子代理／Schema／附件回歸測試。候選版本準備成功且結構化版本檔案有變更時，才建立待人工審查的 Draft PR。
 
 ## 驗收要求
 
