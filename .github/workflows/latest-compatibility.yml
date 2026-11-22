@@ -90,11 +90,15 @@ jobs:
           if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
             throw 'cargo-upgrade.exe is missing after restore/install'
           }
-          $toolVersion = (& $exe --version) -join ' '
-          if ($LASTEXITCODE -ne 0 -or $toolVersion -notmatch '(?<!\d)0\.13\.13(?!\d)') {
-            throw "Unexpected cargo-edit executable version: $toolVersion"
+          # cargo-upgrade.exe is a Cargo subcommand; direct --version is invalid.
+          # Cargo's install inventory records the pinned version even after restore.
+          $installed = @(& cargo '+stable' install --list --root $root)
+          if ($LASTEXITCODE -ne 0 -or -not ($installed -match '^cargo-edit v0\.13\.13(?=:|\s)')) {
+            throw "Unexpected installed cargo-edit version: $($installed -join '; ')"
           }
-          Write-Host "cargo-edit: $toolVersion"
+          & $exe upgrade --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'cargo-upgrade.exe health check failed' }
+          Write-Host 'cargo-edit v0.13.13: install metadata and executable health check PASS'
           $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       # Save immediately after a successful install: future runs can reuse it
