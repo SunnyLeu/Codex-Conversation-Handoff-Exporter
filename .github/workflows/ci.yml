@@ -121,7 +121,7 @@ jobs:
 
       - name: 保留 Windows EXE 回歸診斷
         if: always()
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: windows-exe-e2e-diagnostics
           path: ${{ runner.temp }}/codex-qualification/logs/
