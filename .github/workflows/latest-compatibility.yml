@@ -1,0 +1,281 @@
+name: Latest Compatibility
+
+on:
+  schedule:
+    # Daily 14:00 Asia/Taipei; scheduled GitHub Actions can run later than cron.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+# Never publish a release, tag or merge a PR. Test under read-only permissions;
+# the separate write-permission job only files a draft PR with three manifests.
+permissions:
+  contents: read
+
+concurrency:
+  group: latest-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare and test latest Rust + all Cargo dependencies
+    runs-on: windows-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    outputs:
+      prepared: ${{ steps.report.outputs.prepared }}
+      has_changes: ${{ steps.report.outputs.has_changes }}
+      test_status: ${{ steps.report.outputs.test_status }}
+      rust_version: ${{ steps.report.outputs.rust_version }}
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - name: Checkout trusted main (no persisted credentials)
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Install latest stable Rust / rustfmt / Clippy
+        id: rust
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to install latest stable Rust' }
+          $output = (& rustc '+stable' --version) -join ' '
+          if ($LASTEXITCODE -ne 0 -or $output -notmatch '^rustc (\d+\.\d+\.\d+) ') { throw "Unexpected rustc version: $output" }
+          $version = $Matches[1]
+          "LATEST_RUST=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Latest stable Rust: $version"
+
+      - name: Install manifest updater (cargo-edit)
+        id: cargo_edit
+        if: steps.rust.outcome == 'success'
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'cargo-edit-tool'
+          & cargo '+stable' install cargo-edit --version 0.13.13 --locked --root $root
+          if ($LASTEXITCODE -ne 0) { throw 'cargo-edit installation failed' }
+          $bin = Join-Path $root 'bin'
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Synchronize structured Rust version and upgrade ALL Cargo dependencies
+        id: resolve
+        if: steps.cargo_edit.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & ./tools/Sync-Rust-Version.ps1 -Version $env:LATEST_RUST
+          & cargo '+stable' upgrade --incompatible allow --pinned allow --recursive true
+          if ($LASTEXITCODE -ne 0) { throw 'cargo upgrade failed: cannot claim all dependencies were tested' }
+          & cargo '+stable' update --verbose
+          if ($LASTEXITCODE -ne 0) { throw 'cargo update failed: Cargo.lock is incomplete' }
+          & cargo '+stable' metadata --format-version 1 --no-deps --locked | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Updated manifest/lockfile are inconsistent' }
+          & ./tools/Assert-Rust-Version-Consistency.ps1
+
+      - name: rustfmt with latest combined versions
+        id: fmt
+        if: steps.resolve.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & cargo '+stable' fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'rustfmt check failed' }
+
+      - name: Clippy with latest combined versions
+        id: clippy
+        if: steps.resolve.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & cargo '+stable' clippy --all-targets --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy check failed' }
+
+      - name: Windows Rust unit tests with latest combined versions
+        id: unit
+        if: steps.resolve.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & cargo '+stable' test --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Rust unit tests failed' }
+
+      - name: Windows x64 Release build with latest combined versions
+        id: build
+        if: steps.resolve.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & cargo '+stable' build --release --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Windows Release build failed' }
+
+      - name: Windows EXE synthetic / subagent / Schema / attachment E2E
+        id: e2e
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $exe = [IO.Path]::GetFullPath('target/x86_64-pc-windows-msvc/release/Codex-Conversation-Handoff-Exporter.exe')
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Release EXE not found' }
+          $dir = Join-Path $env:RUNNER_TEMP 'latest-e2e'
+          $logs = Join-Path $dir 'logs'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Invoke-Synthetic-Regression.ps1 -Executable $exe -WorkDirectory (Join-Path $dir 'synthetic') -LogDirectory $logs
+          if ($LASTEXITCODE -ne 0) { throw '11 synthetic EXE cases failed' }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Invoke-R9-Subagent-Regression.ps1 -Executable $exe -WorkDirectory (Join-Path $dir 'subagents') -LogDirectory $logs
+          if ($LASTEXITCODE -ne 0) { throw 'Subagent EXE case failed' }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Invoke-Schema-Regression.ps1 -Executable $exe -WorkDirectory (Join-Path $dir 'schema') -LogDirectory $logs
+          if ($LASTEXITCODE -ne 0) { throw 'Schema/attachment EXE cases failed' }
+
+      - name: Prepare isolated candidate artifact and human-readable verdict
+        id: report
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'candidate' | Out-Null
+          foreach ($f in @('Cargo.toml','Cargo.lock','rust-toolchain.toml')) {
+            Copy-Item -LiteralPath $f -Destination (Join-Path 'candidate' $f) -Force
+          }
+          $changed = @(& git diff --name-only -- Cargo.toml Cargo.lock rust-toolchain.toml)
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect candidate changes' }
+          $prepared = ('${{ steps.resolve.outcome }}' -eq 'success')
+          $hasChanges = ($changed.Count -gt 0)
+          $passes = @('${{ steps.fmt.outcome }}','${{ steps.clippy.outcome }}','${{ steps.unit.outcome }}','${{ steps.build.outcome }}','${{ steps.e2e.outcome }}')
+          $allPassed = $prepared -and (@($passes | Where-Object { $_ -ne 'success' }).Count -eq 0)
+          $result = if ($allPassed) { 'PASS' } else { 'FAIL' }
+          "prepared=$($prepared.ToString().ToLowerInvariant())" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "has_changes=$($hasChanges.ToString().ToLowerInvariant())" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "test_status=$result" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "rust_version=$env:LATEST_RUST" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $lines = @(
+            "Latest stable Rust: $env:LATEST_RUST",
+            "Candidate prepared: $prepared",
+            "Structured version/dependency file changes: $hasChanges",
+            "Overall compatibility: $result",
+            "rustfmt: ${{ steps.fmt.outcome }}",
+            "Clippy: ${{ steps.clippy.outcome }}",
+            "Windows unit tests: ${{ steps.unit.outcome }}",
+            "Windows Release build: ${{ steps.build.outcome }}",
+            "11 synthetic + subagent + Schema/attachment E2E: ${{ steps.e2e.outcome }}",
+            'Real private Codex snapshot: NOT_RUN',
+            'Automated merge: DISABLED; formal local Windows qualification remains required.'
+          )
+          [IO.File]::WriteAllLines((Join-Path 'candidate' 'RESULT.txt'), $lines, [Text.UTF8Encoding]::new($false))
+          ('## Latest Compatibility' + "`n" + ($lines -join "`n")) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+      - name: Upload candidate versions and test result
+        if: always()
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: latest-compatibility-candidate
+          path: candidate/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload EXE diagnostics (where available)
+        if: always()
+        uses: actions/upload-artifact@v7.0.0
+        with:
+          name: latest-compatibility-exe-logs
+          path: ${{ runner.temp }}/latest-e2e/logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Fail the check if preparation or compatibility tests failed
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.report.outputs.test_status }}' -ne 'PASS') {
+            throw 'Latest version preparation or compatibility test failed. Check the candidate artifact, step logs and workflow summary.'
+          }
+
+  create-review-pr:
+    # A different job isolates the write-capable token from crate build scripts.
+    # Only three version manifests are imported; no code from the test job runs here.
+    if: ${{ always() && needs.prepare.outputs.prepared == 'true' && needs.prepare.outputs.has_changes == 'true' }}
+    needs: prepare
+    name: Open or update DRAFT review PR (no merge)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Download candidate manifest files
+        uses: actions/download-artifact@v7.0.0
+        with:
+          name: latest-compatibility-candidate
+          path: candidate
+
+      - name: Apply allowlisted structured manifests only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -- Cargo.toml "$RUNNER_TEMP/base-Cargo.toml"
+          cp -- rust-toolchain.toml "$RUNNER_TEMP/base-rust-toolchain.toml"
+          for file in Cargo.toml Cargo.lock rust-toolchain.toml; do
+            test -f "candidate/$file"
+            cp -- "candidate/$file" "$file"
+          done
+          python3 - <<'PY'
+          import os, pathlib, re, tomllib
+          root = pathlib.Path('.')
+          manifest = tomllib.loads((root / 'Cargo.toml').read_text(encoding='utf-8'))
+          toolchain = tomllib.loads((root / 'rust-toolchain.toml').read_text(encoding='utf-8'))
+          lock = tomllib.loads((root / 'Cargo.lock').read_text(encoding='utf-8'))
+          rust = toolchain['toolchain']['channel']
+          assert re.fullmatch(r'\d+\.\d+\.\d+', rust), 'Toolchain must be an exact stable release'
+          assert manifest['package']['rust-version'] == rust, 'Toolchain/MSRV mismatch'
+          base = pathlib.Path(os.environ['RUNNER_TEMP'])
+          old = tomllib.loads((base / 'base-Cargo.toml').read_text(encoding='utf-8'))
+          old_toolchain = tomllib.loads((base / 'base-rust-toolchain.toml').read_text(encoding='utf-8'))
+          assert manifest['package']['name'] == old['package']['name']
+          assert manifest['package']['version'] == old['package']['version'], 'Product release version must not change'
+          # Only dependency requirements and the structured MSRV may change.
+          for name in manifest.keys() | old.keys():
+              if name == 'package':
+                  before = dict(old[name]); before.pop('rust-version', None)
+                  after = dict(manifest[name]); after.pop('rust-version', None)
+                  assert before == after, 'Unexpected package metadata edit'
+              elif name not in ('dependencies', 'build-dependencies', 'target'):
+                  assert old.get(name) == manifest.get(name), f'Unexpected manifest section: {name}'
+          before = dict(old_toolchain['toolchain']); before.pop('channel', None)
+          after = dict(toolchain['toolchain']); after.pop('channel', None)
+          assert before == after, 'Unexpected toolchain settings edit'
+          assert len(lock['package']) >= 50 and any(p['name'] == old['package']['name'] and p['version'] == old['package']['version'] for p in lock['package'])
+          print('Candidate manifest structural checks PASS:', rust)
+          PY
+          unexpected="$(git diff --name-only -- . ':!Cargo.toml' ':!Cargo.lock' ':!rust-toolchain.toml')"
+          test -z "$unexpected" || { echo "Unexpected files changed: $unexpected"; exit 1; }
+
+      - name: Create or update DRAFT PR; never merge or publish
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          branch: automation/latest-rust-cargo-compatibility
+          add-paths: |
+            Cargo.toml
+            Cargo.lock
+            rust-toolchain.toml
+          commit-message: "build: 準備最新 Rust 與 Cargo 相依套件相容性驗證"
+          title: "build: 最新 Rust 與 Cargo 全依賴整合相容性測試"
+          draft: always-true
+          delete-branch: false
+          body: |
+            Scheduled latest-version candidate. **Draft PR for manual review; DO NOT merge before local Windows qualification.**
+
+            - Latest Rust: `${{ needs.prepare.outputs.rust_version }}` (MSRV synchronized)
+            - Combined latest Cargo manifest + transitive lockfile, including incompatible major and pinned upgrades.
+            - Windows rustfmt / Clippy / unit / Release / 11 synthetic EXE + subagent + Schema and attachment tests: **${{ needs.prepare.outputs.test_status }}** in the originating Latest Compatibility workflow.
+            - No README, release version, native library license, GitHub Release or Git tag was updated.
+            - The workflow's test result and executable logs are preserved as artifacts.
+            - GitHub Actions workflow-created PRs may require manual approval to run their own CI.
+
+            **Local Windows qualification and review are mandatory. No auto-merge or auto-release.**

@@ -1,10 +1,10 @@
-# 2.2.0 輸出契約（延續 2.1.0 的 Schema 1.0）
+# 2.3.0 輸出契約（延續 2.2.0 的 Schema 1.0）
 
 相對基線為 2.0.3 / c0d30b6d86d33e8a80bb6bf7785b6a664fdf7a97。R9 已在 Windows x64 完成 241 項 Rust、既有 7 組 EXE 與 1 組子代理 EXE、42 項 Schema 事實及附件／快照檢查。這是已觀測來源格式的工具輸出契約，不是完整無損保證。
 
 ## 1. 相容與範圍
 
-既有 messages、turns、activities、requests、子代理、附件還原、專案歸屬與 N/N 重寫維持原有流程。新增 `handoff_schema_version="1.0"`；`exporter_version` 反映各次執行的程式版本；2.1.0 原輸出使用 `2.1.0`，2.2.0 輸出使用 `2.2.0`。子代理各自保存 local-history 的來源觀測；不因新欄位加入 Guardian 為一般對話、不重新啟用封存目錄或從別條對話複製 messages。
+既有 messages、turns、activities、requests、子代理、附件還原、專案歸屬與 N/N 重寫維持原有流程。新增 `handoff_schema_version="1.0"`；`exporter_version` 反映各次執行的程式版本；2.1.0 原輸出使用 `2.1.0`，2.2.0 輸出使用 `2.2.0`；2.3.0 輸出使用 `2.3.0`。子代理各自保存 local-history 的來源觀測；不因新欄位加入 Guardian 為一般對話、不重新啟用封存目錄或從別條對話複製 messages。
 
 這不是所有 Codex 版本的完整標準，也不是任意 JSON 的無損備份。以 2026-10-29 提供的原始樣本建立已觀測版型，未知內容維持可見且待評估。
 
@@ -103,3 +103,12 @@ Root Handoff 與有實體來源的 Subagent 可包含 `source_snapshot`，其中
 - 同一題出現相互衝突的不同答案時 `status: "response_conflict"`，以 `conflicting_question_indexes` 標示歧義題目，不替該題選擇答案；其他無歧義回答仍可保留。
 
 來源原本的 `messages[].content` 不變。工具輸出中的 `accepted=true` 是投遞成功回執，**不能視為使用者回答**。既有 `handoff_schema_version: "1.0"` 保留；這些是附加欄位，不刪除舊有欄位。輸出語意是已觀測、可核對的關聯，不是全面的未來工具格式保證。
+
+## 2.3.0：同名舊 Handoff 共存與錯誤專用 DEBUG 追蹤
+
+- 原有 Handoff Schema `1.0` 的對話、工具、附件、來源快照與整合語意不變；`exporter_version` 改為 `2.3.0`。
+- 舊 Codex 對話的 Handoff 與新對話 `conversation_id` 不同，但**實際最終檔名不同時允許保留在同一目錄**。本次輸出計畫若使用到既有其他對話的檔案路徑，仍一律拒絕跨身分覆寫（`DESTINATION_NAME_COLLISION`）。
+- 只會清理／替換本次選定對話及已整合子代理的舊 Handoff；清理前對其完整 JSON 與最外層 ID 進行驗證。無關的檔案即使沒有可辨識身分，也不自動修改。
+- `V2_RESULT` 失敗時新增 `error_code`、`diagnostic_log`，保留 `status`、`error` 與 `completed_writes`。`--yes` 在參數解析失敗時亦輸出可判讀的失敗收據。
+- 日誌 JSONL 自程式啟動後的事件開始，以 `run_id`、`event_id`、UTC 時戳、執行緒與詳細內容記錄。發生錯誤才會建立檔案，之後持續寫入事件；**全程無錯誤不留下 DEBUG 檔案**。不遮蔽實際錯誤文字與已取得的診斷資訊；不自動掃描、刪除舊日誌。例外終止或突然斷電無法保證保存尚未寫入的事件。
+- 診斷檔與 Handoff 本體分離，可能包含本機私人路徑、對話 ID 及錯誤中附帶的原始內容。分享前應自行評估敏感資訊。

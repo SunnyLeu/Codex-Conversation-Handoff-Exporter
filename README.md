@@ -1,58 +1,15 @@
 # Codex Conversation Handoff Exporter
 
-將本機 Codex 對話匯出成 `.handoff.json` 的 **Windows x64** 工具。
-支援整個專案或一條無專案的獨立對話，提供彩色 Console、即時進度與原生資料夾選擇器。
+將本機 Codex 對話匯出為 `.handoff.json` 的 Windows x64 工具，支援整個專案與獨立對話。提供互動式主控台、即時進度、原生資料夾選擇器及 CLI 自動化匯出。
 
-這是非官方社群專案，並非 OpenAI 的產品，也未獲 OpenAI 背書。
-
-## 2.2.0 更新摘要（2026-11-12）
-
-`2.2.0` 新增 Codex 非同步使用者輸入的結構化回答關聯，並改善既有 Handoff 覆寫、來源驗證與資料清理的執行效率。既有的來源完整性、目的地歸屬保護、完整重建與不中斷 Codex 的操作原則均維持。
-
-- **確認非同步問答的實際回答**：將已驗證的 `<send_user_message_question_reply>` 使用者訊息關聯至 `request_user_input_async`，保留題目索引、回答文字、來源訊息識別及可取得的時間；區分 `answered`、`partially_answered`、`response_conflict` 與未回答狀態，不以工具回執冒充回答。原始訊息保持不變。
-- **降低既有 Handoff 驗證成本**：僅擷取必要的頂層對話身分，但仍完整檢查 JSON 及既有輸出安全條件，拒絕損壞、異身分與不安全的目的地檔案。
-- **改善來源核對與大型資料清理**：對來源快照及寫入前重驗採有界併行處理，並改善候選 JSON 釋放與進度執行緒結束方式；不取消前綴 SHA-256、來源改寫／截斷或附件保護。
-- **擴充階段計時**：新增來源快照、重驗、目的地檢查與資料清理等指標，便於後續效能分析。
-
-Windows 11 x64 驗收已通過 **246 項 Rust 測試、8 組合成 EXE 端到端測試、子代理整合、42 項 Schema 事實與 13 項附件檢查**。兩個真實專案各以兩批、每版本合計六次重複覆寫測試，比較 2.1.0 的平均外部耗時分別降低 **23.50%** 與 **24.08%**；此為特定環境的量測結果，不代表所有電腦都會得到相同幅度。匯出成功與數量相同不等於已對所有真實 Handoff 完成逐份語意核對。
-
-本版亦包含 Dependabot PR #7 的十項 Cargo 相依套件更新，並同步第三方授權清單。更新後的 Windows R5 驗收已通過 246 項 Rust 測試、8 組 EXE 端到端測試、子代理整合、42 項 Schema 事實及 13 項附件檢查。上述真實專案效能數據係更新前的 R4 建置實測，不代表 R5 更新相依套件後具有完全相同的加速幅度。
-
-詳細內容請參閱 [2.2.0 變更說明](CHANGES-2.2.0.md) 與 [Schema 契約](SCHEMA-CONTRACT.md)。
-
-## 2.1.0 更新摘要（2026-10-30）
-
-`2.1.0` 著重於**對話內容可追溯、來源附件保真，以及不中斷 Codex 的安全匯出**。使用方式與原有 Windows x64 主控台操作維持相同。
-
-- **安全匯出仍在進行中的對話**：為選定的每份 Session 固定已讀取的原始位元組範圍並驗證 SHA-256。Codex 可以繼續追加紀錄；新追加的訊息與新建的 Session 留待下一次匯出。原有前綴若遭改寫或截斷，仍會拒絕匯出。這是逐檔快照，**不是多檔案同一瞬間的原子快照**。
-- **保留正在工作的子代理**：可信委派的子代理即使只有單次 `task_started`、工具活動、尚未正式答覆，也能正確保留；不把初始化／繼承的指令冒充子代理發言。
-- **附件來源原件優先**：原始附件可安全取得且為 UTF-8 時，以附件檔案原始位元組還原內容，記錄 SHA-256 與工具候選差異；原件不能驗證時不把工具文字錯標為已驗證。
-- **擴充來源觀測**：新增 `handoff_schema_version: "1.0"`、`source_observations`、`schema_coverage`、`source_snapshot`，更完整保留工具原生結果、錯誤、設定、權限、子代理、媒體與用量觀測，並描述截短、未知與未驗證資料。
-
-Windows x64 實測：**241 項 Rust 測試通過**、原有 **7 組 EXE 端到端測試**與新增 **1 組子代理 EXE 測試**通過、**42 項 Schema 內容事實**通過。真實資料複查已確認 38 筆先前受工具錯誤文字污染的附件恢復原件，另有 109 筆原本正確的附件維持一致；先前失敗的子代理也已在真實新匯出中確認收錄。完整相容與限制請參閱 [Schema 契約](SCHEMA-CONTRACT.md) 與 [2.1.0 變更說明](CHANGES-2.1.0.md)。
-
-**重要限制：**Handoff 不是官方 Codex 格式，也不是對所有原始資料完全無損的備份。已觀測來源的未知格式、有界截短、缺失原件及未來版本差異，仍須參照輸出中的保留與覆蓋說明；成功匯出不代表所有語意內容均獲完整性認證。
-
-## 2.0.3 修正說明：來源一致性與首頁殘留對話
-
-- 無人值守的 `--project-id ... --yes` 匯出，改為在寫入前複查**本次專案**的主對話、子代理、實體 Rollout、標題與專案身分；新增的目標對話／續接會拒絕使用舊掃描結果，避免無聲漏匯。
-- 其他專案的 Rollout、標題、附件及 SQLite WAL 變更，不再單憑全域雜湊差異阻擋本專案匯出。實際由本次來源讀取的附件檔案仍會檢查前後一致。
-- 若 Codex 尚未寫出可辨識的新 Session，匯出器無法預知它將出現；本次修正不宣稱能繞過 Codex 保存延遲，亦不會忽略本專案仍在更新的來源。
-- 首頁獨立對話將以全域狀態中的 `projectless-thread-ids` 與現行 SQLite Thread 索引交集判定顯示；資料庫中找不到或已封存的殘留 ID 不再列出，且不修改 Codex 原始狀態。明示 `--project-id`／`--thread-id` 的匯出路徑保持原有來源安全檢查。
-- Windows 11 x64 已完成 174 項 Rust 單元測試、七組合成端到端測試及首頁對話清單實機核對；剛結束對話的即時匯出已有初步正常回報，仍受 Codex Session 寫入時序限制。
-
-## 2.0.2 修正說明
-
-- 多段 `history_base` 續接改依實體 Rollout ID 對應父檔，並在該父檔驗證相對位元組 Offset 與邏輯 Ordinal，不會錯把 Offset 套用到整條已合併歷史。
-- 單次實際僅輸出一份 Handoff 時，允許目的地存在其他對話的 Handoff；既有輸出清理仍限本次目標。遇到同名異對話、損壞檔案、無法辨識的目標或不安全連結仍拒絕覆寫／清理。多份輸出情境維持原有保護。
-- 本次兩項修正已先由 2.0.1 修正候選版通過 Windows 171 項 Rust 測試及七組合成 EXE 端到端測試；實際出錯的主對話也已由使用者回報成功匯出。**正式 2.0.2 版本仍須以 2.0.2 自身的 CI、建置與發行驗收結果為準。**
+本工具是非官方社群專案，與 OpenAI 無隸屬關係，亦未獲官方背書。
 
 ## 下載與執行
 
 在本儲存庫的 [Releases](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/releases)
 下載 Windows x64 套件：
 
-`Codex-Conversation-Handoff-Exporter-2.2.0-windows-x64.zip`
+`Codex-Conversation-Handoff-Exporter-2.3.0-windows-x64.zip`
 
 解壓後執行 `Codex-Conversation-Handoff-Exporter.exe`。
 EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔，可以移至自己偏好的位置。
@@ -60,7 +17,7 @@ EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔�
 Windows 自帶的系統 DLL 仍為必要元件。重新散布時請保留套件內的授權聲明。
 
 **平台範圍：僅支援 Windows x64（x86-64／AMD64）。**
-2.2.0 已在 Windows 11 x64 完成驗收。不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
+Windows 11 x64 為主要驗證環境；請以對應 Release 的正式驗收紀錄為準。不發布 Windows 32 位元、ARM64、Linux 或 macOS 版本。
 其他 Windows 版本尚未完成驗證。EXE、Codex 資料、系統暫存目錄與輸出位置仍受 Windows 存取權限限制。
 
 ## 基本操作
@@ -99,6 +56,13 @@ Windows 自帶的系統 DLL 仍為必要元件。重新散布時請保留套件�
   --project-id "YOUR_PROJECT_ID" `
   --output-directory "C:\Exports\MyProject" `
   --yes
+
+# 出現錯誤時保留完整 DEBUG JSONL；正常成功不產生日誌。
+# 自動化匯出仍可使用 --yes，無需另外指定 DEBUG 參數。
+.\Codex-Conversation-Handoff-Exporter.exe `
+  --project-id "YOUR_PROJECT_ID" `
+  --output-directory "C:\Exports\MyProject" `
+  --yes --no-pause
 
 # 唯讀列出登錄的專案 ID（可能包含未出現在側邊欄的專案）。
 .\Codex-Conversation-Handoff-Exporter.exe --developer-mode --list-projects
@@ -147,19 +111,17 @@ Handoff 不是 Codex 原始資料夾備份，也不是可匯入 Codex 的官方�
 10～99 份為 `01.`，100～999 份為 `001.`。只有一條對話的專案仍保留 `1.`。
 獨立對話不加編號。兩種模式均保留標題清理及 GMT+8 更新時間戳規則。
 
-每次匯出會完整重寫本次目標的 Handoff，並整理屬於同一目標的過期輸出。
+每次匯出會完整重新產生本次目標的 Handoff，並整理屬於同一目標的過期輸出。
 選擇的資料夾就是實際輸出位置，不會自動新增專案子資料夾。
-若本次實際只會產生**一份 Handoff**（單一主對話的專案或獨立對話），允許資料夾內已有其他對話的有效 Handoff；它們不會因此被覆寫或清理。
-若本次會產生多份 Handoff，仍要求資料夾內既有 Handoff 都屬於本次目標。
-任何模式下，預定輸出的檔名若已被不同對話占用，或既有 Handoff 損壞、身分不明、檔案是不安全的連結／重新解析點，仍會在寫入前拒絕；沒有「強制覆寫所有檔案」選項。
+同一個輸出資料夾可以保存其他對話（包含已從 Codex 刪除的對話）的舊 Handoff；只要檔案不是本次預定寫入或清理的目標，程式不會因對話 ID 不同而拒絕匯出，也不會擅自覆寫、移動或刪除它們。
+若本次預定的實際輸出路徑已被**其他 `conversation_id`** 占用，程式會拒絕覆寫並提示衝突位置。即將清理的本次目標舊 Handoff 必須通過完整 JSON、身分與安全路徑檢查；無關檔案即使損壞，也不會被本次匯出修改或清理。沒有「強制覆寫所有檔案」選項。
 不修改 Codex 原始來源資料。
 
 ## 從原始碼建置
 
-請在 Windows x64 安裝 **Rust 1.98.0 或更新版本的 MSVC 工具鏈**，
+請在 Windows x64 安裝 **Rust 1.100.0 或更新版本的 MSVC 工具鏈**，
 以及 Visual Studio C++ Build Tools（MSVC x64 工具集與 Windows SDK）。
-正式發行驗收使用 Rust 1.98.0；更新工具鏈仍須自行測試相容性，
-並於重新散布前核對對應的標準函式庫授權聲明。
+專案使用 `rust-toolchain.toml` 固定 Rust 1.100.0；如果改用其他版本，請重新執行相容性測試，並核對相應標準函式庫授權聲明。
 
 在含有 `Cargo.toml` 的專案根目錄執行：
 
@@ -178,6 +140,12 @@ cargo test --locked
 ```text
 target\x86_64-pc-windows-msvc\release\Codex-Conversation-Handoff-Exporter.exe
 ```
+
+## DEBUG 診斷
+
+在程式啟動時於記憶體建立完整事件追蹤，涵蓋命令列選項、來源與目的地檢查、身分判斷、檔案處理、錯誤原因鏈與可取得的呼叫堆疊。當執行過程發生錯誤（即使後續恢復成功），才將先前及後續事件保存為 `%TEMP%\CodexHandoff-Diagnostics\v2.3.0-*.debug.jsonl`；完全沒有錯誤時不建立 DEBUG 檔案。程式不巡覽、不刪除歷史日誌，也不設自動清理期限。
+
+DEBUG 檔可能包含本機完整路徑、對話 ID、原始錯誤內容及相關資料。匯出失敗時，主控台會提供原因與診斷檔位置；使用 `--yes` 時不等待按鍵，回傳非零結束碼、stderr 和 `V2_RESULT` 失敗收據。
 
 ## 限制與疑難排解
 

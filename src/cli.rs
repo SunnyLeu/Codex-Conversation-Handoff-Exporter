@@ -9,6 +9,7 @@ const PUBLIC: &[&str] = &[
     "thread_id",
     "output_directory",
     "yes",
+    "no_pause",
     "developer_mode",
     "help",
     "version",
@@ -33,6 +34,7 @@ pub(crate) struct ProductOptions {
     pub(crate) thread: Option<String>,
     pub(crate) output: Option<std::path::PathBuf>,
     pub(crate) yes: bool,
+    pub(crate) no_pause: bool,
 }
 #[derive(Debug)]
 pub(crate) enum Invocation {
@@ -97,6 +99,7 @@ pub(crate) fn parse(raw: Vec<OsString>) -> Result<Invocation, clap::Error> {
         thread: args.thread_id,
         output: given("output_directory").then_some(args.output_directory),
         yes: args.yes,
+        no_pause: args.no_pause,
     };
     if result.yes
         && (result.project.is_none() && result.thread.is_none() || result.output.is_none())
@@ -109,14 +112,25 @@ pub(crate) fn parse(raw: Vec<OsString>) -> Result<Invocation, clap::Error> {
 }
 
 pub(crate) fn entry(raw: Vec<OsString>) -> i32 {
+    crate::console_ui::capture();
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        crate::console_ui::capture_panic(info);
+        previous_hook(info);
+    }));
+    crate::console_ui::diagnostic(
+        "DEBUG",
+        "cli.raw_arguments",
+        serde_json::json!({
+            "args": raw.iter().map(|x| x.to_string_lossy().to_string()).collect::<Vec<_>>(),
+            "cwd": std::env::current_dir().ok(),
+        }),
+    );
     let dev = raw.iter().any(|s| s == "--developer-mode");
     let unattended = raw.iter().any(|s| s == "--yes");
     let no_pause = raw.iter().any(|s| s == "--no-pause");
     match parse(raw) {
-        Ok(Invocation::Developer(args)) => {
-            crate::legacy_main(args);
-            0
-        }
+        Ok(Invocation::Developer(args)) => crate::legacy_main(args),
         Ok(Invocation::Product(options)) => crate::product::start(options),
         Err(error) => {
             if matches!(
@@ -126,14 +140,49 @@ pub(crate) fn entry(raw: Vec<OsString>) -> i32 {
                 let _ = error.print();
                 return 0;
             }
-            std::eprintln!("[參數錯誤] {}", error.to_string().trim());
+            let message = error.to_string();
+            std::eprintln!("[參數錯誤] {}", message.trim());
+            crate::console_ui::diagnostic(
+                "ERROR",
+                "cli.parse.failure",
+                serde_json::json!({
+                    "error_code": "CLI_INVALID_ARGUMENT",
+                    "error_kind": format!("{:?}", error.kind()),
+                    "full_error": message,
+                    "debug": format!("{error:?}"),
+                }),
+            );
+            let log_path = match crate::console_ui::save_diagnostic_log("FAIL", Some(&message)) {
+                Ok(path) => {
+                    std::eprintln!("[DEBUG] 完整診斷紀錄：{}", path.display());
+                    Some(path)
+                }
+                Err(error) => {
+                    std::eprintln!("[錯誤] 無法儲存 DEBUG 診斷：{error:#}");
+                    None
+                }
+            };
+            if unattended {
+                std::println!(
+                    "V2_RESULT {}",
+                    crate::product::machine_receipt_ascii(&serde_json::json!({
+                        "status": "FAIL", "version": crate::VERSION,
+                        "error_code": "CLI_INVALID_ARGUMENT", "error": message,
+                        "diagnostic_log": log_path, "completed_writes": 0,
+                    }))
+                );
+            }
             use std::io::IsTerminal;
-            if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
-                if dev && !no_pause {
+            if std::io::stdin().is_terminal()
+                && std::io::stdout().is_terminal()
+                && !unattended
+                && !no_pause
+            {
+                if dev {
                     std::eprintln!("Press Enter to close...");
                     let mut line = String::new();
                     let _ = std::io::stdin().read_line(&mut line);
-                } else if !dev && !unattended {
+                } else {
                     crate::console_ui::wait_q();
                 }
             }
@@ -169,6 +218,25 @@ mod tests {
                 .collect(),
         )
     }
+    #[test]
+    fn no_pause_flag_does_not_weaken_confirmation() {
+        let outcome = p(&[
+            "--project-id",
+            "sample",
+            "--output-directory",
+            "data",
+            "--no-pause",
+        ])
+        .unwrap();
+        let Invocation::Product(options) = outcome else {
+            panic!("expected product")
+        };
+        assert!(options.no_pause);
+        assert!(!options.yes);
+        assert!(p(&["--yes", "--no-pause"]).is_err());
+        assert!(p(&["--debug-log"]).is_err());
+    }
+
     #[test]
     fn all_eight_source_destination_yes_combinations() {
         for src in [false, true] {

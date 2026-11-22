@@ -1,9 +1,41 @@
 //! Read-only output preflight. No force option, no destination guessing.
 use anyhow::{Context, Result, bail};
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
+use serde_json::json;
 use std::collections::HashSet;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// Collision on an actual planned output path. Foreign files at distinct
+/// paths are never automatically removed merely because their Codex thread
+/// was deleted or their display title was reused.
+#[derive(Debug)]
+pub(crate) struct PlannedHandoffConflict {
+    pub(crate) file: PathBuf,
+    pub(crate) existing_id: String,
+    pub(crate) expected_id: String,
+}
+impl fmt::Display for PlannedHandoffConflict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "同名 Handoff 檔案已屬於另一條對話，已停止以保護資料。\n衝突檔案：{}\n舊 conversation_id：{}\n新 conversation_id：{}\n請改選資料夾，或先自行備份並搬離舊檔再重試；不會根據名稱猜測兩條對話相同，也不會覆寫舊檔。",
+            self.file.display(),
+            self.existing_id,
+            self.expected_id
+        )
+    }
+}
+impl std::error::Error for PlannedHandoffConflict {}
+
+pub(crate) fn failure_code(error: &anyhow::Error) -> &'static str {
+    if error.downcast_ref::<PlannedHandoffConflict>().is_some() {
+        "DESTINATION_NAME_COLLISION"
+    } else {
+        "EXPORT_ERROR"
+    }
+}
 
 // Existing Handoffs can be very large. Ownership checks need only the root
 // conversation_id, but must still reject malformed JSON anywhere in the file.
@@ -137,20 +169,34 @@ pub(crate) fn validate_path(output: &Path, args: &crate::Args) -> Result<()> {
 /// A single root handoff may share its folder with unrelated Handoffs.
 /// Existing files still have to be well-formed and safe to inspect, and a
 /// planned filename collision is checked separately before any deletion.
-pub(crate) fn validate_existing(
-    output: &Path,
-    allowed: &HashSet<String>,
-    allow_foreign: bool,
-) -> Result<()> {
+/// Destination-wide preflight checks the folder shape only. It must not
+/// reject a file solely because its conversation_id is outside this export.
+/// Actual writes are guarded by validate_planned(), and stale cleanup uses
+/// validated IDs of the conversations selected for this particular export.
+/// An unrelated malformed handoff is left untouched, not parsed or deleted.
+pub(crate) fn validate_existing(output: &Path, allowed: &HashSet<String>) -> Result<()> {
+    let mut allowed_ids: Vec<_> = allowed.iter().collect();
+    allowed_ids.sort_unstable();
+    crate::console_ui::diagnostic(
+        "DEBUG",
+        "destination.existing.begin",
+        json!({
+            "directory": output,
+            "allowed_conversation_ids": allowed_ids,
+            "policy": "foreign Handoffs coexist; only planned paths and owned stale paths may be modified",
+        }),
+    );
     if !output.exists() {
         return Ok(());
     }
     if !output.is_dir() {
         bail!("匯出目的地不是資料夾：{}", output.display());
     }
-    for entry in fs::read_dir(output)? {
-        let entry = entry?;
-        let p = entry.path();
+    let mut inspected = 0usize;
+    for entry in
+        fs::read_dir(output).with_context(|| format!("無法讀取匯出目的地：{}", output.display()))?
+    {
+        let entry = entry.with_context(|| format!("無法列舉目的地項目：{}", output.display()))?;
         if !entry
             .file_name()
             .to_string_lossy()
@@ -159,23 +205,72 @@ pub(crate) fn validate_existing(
         {
             continue;
         }
-        let meta = fs::symlink_metadata(&p)?;
-        if reparse(&meta) || !meta.is_file() {
-            bail!("不安全的既有 Handoff 項目：{}", p.display());
-        }
-        let bytes =
-            fs::read(&p).with_context(|| format!("無法讀取既有 Handoff：{}", p.display()))?;
-        let id = existing_conversation_id(&bytes)
-            .with_context(|| format!("既有 Handoff 已損壞，未進行覆寫：{}", p.display()))?;
-        let id = id
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("既有 Handoff 無法確認身分：{}", p.display()))?;
-        if !allowed.contains(id) && !allow_foreign {
-            bail!("資料夾含其他匯出目標的 Handoff（{id}）；拒絕覆寫或清理。請選擇其他資料夾。");
-        }
+        let p = entry.path();
+        let meta = fs::symlink_metadata(&p)
+            .with_context(|| format!("無法檢查目的地項目：{}", p.display()))?;
+        inspected += 1;
+        crate::console_ui::diagnostic(
+            "DEBUG",
+            "destination.existing.coexist",
+            json!({
+                "file": p, "size_bytes": meta.len(), "file_index": inspected,
+                "reparse_point": reparse(&meta), "is_regular_file": meta.is_file(),
+                "decision": "do_not_touch_unless_selected_for_cleanup_or_planned_output",
+            }),
+        );
+    }
+    crate::console_ui::diagnostic(
+        "INFO",
+        "destination.existing.pass",
+        json!({
+            "directory": output, "inspected_handoffs": inspected,
+            "foreign_handoffs_allowed": true,
+            "selected_conversation_count": allowed.len(),
+        }),
+    );
+    Ok(())
+}
+/// Verify an existing file that was indexed as belonging to this export
+/// before stale cleanup. Prefix-only indexing is an optimization, never
+/// sufficient authority to remove a file. Unrelated Handoffs are not read.
+pub(crate) fn validate_owned_stale(path: &Path, expected_id: &str) -> Result<()> {
+    let metadata = fs::symlink_metadata(path)
+        .with_context(|| format!("無法檢查本次欲清理的既有 Handoff：{}", path.display()))?;
+    if reparse(&metadata) || !metadata.is_file() {
+        bail!(
+            "本次欲清理的 Handoff 為不安全的檔案項目：{}",
+            path.display()
+        );
+    }
+    let data = fs::read(path)
+        .with_context(|| format!("無法讀取本次欲清理的 Handoff：{}", path.display()))?;
+    let actual = existing_conversation_id(&data)
+        .with_context(|| format!("本次欲清理的 Handoff JSON 已損壞：{}", path.display()))?
+        .ok_or_else(|| {
+            anyhow::anyhow!("本次欲清理的 Handoff 缺少有效對話 ID：{}", path.display())
+        })?;
+    let valid = actual == expected_id;
+    crate::console_ui::diagnostic(
+        if valid { "DEBUG" } else { "ERROR" },
+        "destination.cleanup.ownership",
+        json!({
+            "file": path, "expected_conversation_id": expected_id,
+            "actual_conversation_id": actual, "valid": valid,
+            "size_bytes": metadata.len(),
+            "will_delete_only_if_valid": true,
+        }),
+    );
+    if !valid {
+        bail!(
+            "預定清理的既有 Handoff 身分已變更，拒絕刪除或覆寫：{}；預期 ID={}，實際 ID={}",
+            path.display(),
+            expected_id,
+            actual
+        );
     }
     Ok(())
 }
+
 /// All prospective final filenames are checked before any existing Handoff is
 /// removed. This also covers the legacy sequential exporter, whose final rename
 /// previously relied solely on the whole-directory ownership preflight.
@@ -183,6 +278,13 @@ pub(crate) fn validate_planned(
     output: &Path,
     candidates: &[(String, serde_json::Value)],
 ) -> Result<()> {
+    crate::console_ui::diagnostic(
+        "DEBUG",
+        "destination.planned.begin",
+        json!({
+            "directory": output, "candidates": candidates.len(),
+        }),
+    );
     let mut names = HashSet::new();
     for (filename, handoff) in candidates {
         // A generated filename must never escape the chosen output folder.
@@ -200,7 +302,17 @@ pub(crate) fn validate_planned(
             .ok_or_else(|| anyhow::anyhow!("準備匯出的 Handoff 缺少對話身分：{filename}"))?;
         let meta = match fs::symlink_metadata(&planned) {
             Ok(meta) => meta,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                crate::console_ui::diagnostic(
+                    "DEBUG",
+                    "destination.planned.new_file",
+                    json!({
+                        "file": planned, "conversation_id": expected_id,
+                        "decision": "ALLOW_NEW_FILE", "will_modify_existing": false,
+                    }),
+                );
+                continue;
+            }
             Err(error) => {
                 return Err(error)
                     .with_context(|| format!("無法檢查目的檔案：{}", planned.display()));
@@ -216,13 +328,32 @@ pub(crate) fn validate_planned(
         let current_id = current_id.as_deref().ok_or_else(|| {
             anyhow::anyhow!("目的檔案身分不明，不允許覆寫：{}", planned.display())
         })?;
-        if current_id != expected_id {
-            bail!(
-                "目的檔名已屬於另一條對話（{current_id}），拒絕覆寫：{}",
-                planned.display()
-            );
+        let accepted = current_id == expected_id;
+        crate::console_ui::diagnostic(
+            if accepted { "DEBUG" } else { "ERROR" },
+            "destination.planned.ownership",
+            json!({
+                "file": planned, "existing_conversation_id": current_id,
+                "incoming_conversation_id": expected_id, "accepted": accepted,
+                "size_bytes": meta.len(),
+            }),
+        );
+        if !accepted {
+            return Err(PlannedHandoffConflict {
+                file: planned,
+                existing_id: current_id.to_owned(),
+                expected_id: expected_id.to_owned(),
+            }
+            .into());
         }
     }
+    crate::console_ui::diagnostic(
+        "INFO",
+        "destination.planned.pass",
+        json!({
+            "directory": output, "checked_candidates": candidates.len(),
+        }),
+    );
     Ok(())
 }
 
@@ -276,7 +407,7 @@ mod tests {
             r#"{}"#,
         ] {
             fs::write(&p, data).unwrap();
-            assert!(validate_existing(d.path(), &HashSet::from(["same".into()]), false).is_err());
+            assert!(validate_existing(d.path(), &HashSet::from(["same".into()])).is_ok());
             assert_eq!(fs::read_to_string(&p).unwrap(), data);
         }
     }
@@ -288,7 +419,7 @@ mod tests {
             r#"{"conversation_id":"same"}"#,
         )
         .unwrap();
-        assert!(validate_existing(d.path(), &HashSet::from(["same".into()]), false).is_ok());
+        assert!(validate_existing(d.path(), &HashSet::from(["same".into()])).is_ok());
     }
     #[test]
     fn single_handoff_can_share_folder_but_not_overwrite_foreign() {
@@ -297,8 +428,8 @@ mod tests {
         let own = d.path().join("01. own.handoff.json");
         let bytes = br#"{"conversation_id":"foreign-thread"}"#;
         fs::write(&foreign, bytes).unwrap();
-        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), true).is_ok());
-        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), false).is_err());
+        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()])).is_ok());
+        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()])).is_ok());
         let planned = vec![(
             "01. own.handoff.json".to_string(),
             serde_json::json!({"conversation_id":"own-thread"}),
@@ -331,13 +462,74 @@ mod tests {
     }
 
     #[test]
-    fn single_handoff_still_rejects_damaged_or_unknown_other_handoffs() {
-        let d = crate::codex_paths::TempDir::new("dest-damaged-test").unwrap();
+    fn deleted_old_thread_can_coexist_with_recreated_same_title_at_another_path() {
+        let dir = crate::codex_paths::TempDir::new("deleted-recreated-same-title").unwrap();
+        let old_path = dir
+            .path()
+            .join("01. reused-name-20261122110000.handoff.json");
+        let original = br#"{"conversation_id":"deleted-old-id","messages":["keep me"]}"#;
+        fs::write(&old_path, original).unwrap();
+        let scope = HashSet::from(["new-thread-id".to_string()]);
+        validate_existing(dir.path(), &scope).unwrap();
+        let incoming = vec![(
+            "01. reused-name-20261122120000.handoff.json".to_string(),
+            serde_json::json!({"conversation_id":"new-thread-id"}),
+        )];
+        validate_planned(dir.path(), &incoming).unwrap();
+        assert_eq!(fs::read(&old_path).unwrap(), original);
+        // Only an actual output-path collision can reject the new thread.
+        let colliding = vec![(
+            "01. reused-name-20261122110000.handoff.json".to_string(),
+            serde_json::json!({"conversation_id":"new-thread-id"}),
+        )];
+        let err = validate_planned(dir.path(), &colliding).unwrap_err();
+        assert_eq!(failure_code(&err), "DESTINATION_NAME_COLLISION");
+        let conflict = err.downcast_ref::<PlannedHandoffConflict>().unwrap();
+        assert_eq!(conflict.file, old_path);
+        assert_eq!(conflict.existing_id, "deleted-old-id");
+        assert_eq!(conflict.expected_id, "new-thread-id");
+        assert_eq!(fs::read(&old_path).unwrap(), original);
+    }
+
+    #[test]
+    fn unowned_unreadable_or_malformed_handoffs_are_not_a_reason_to_delete_anything() {
+        let d = crate::codex_paths::TempDir::new("foreign-malformed-do-not-touch").unwrap();
         let foreign = d.path().join("foreign.handoff.json");
-        fs::write(&foreign, b"invalid").unwrap();
-        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), true).is_err());
-        fs::write(&foreign, br#"{}"#).unwrap();
-        assert!(validate_existing(d.path(), &HashSet::from(["own-thread".into()]), true).is_err());
+        for bytes in [&b"invalid"[..], &b"{}"[..]] {
+            fs::write(&foreign, bytes).unwrap();
+            validate_existing(d.path(), &HashSet::from(["own-thread".to_owned()])).unwrap();
+            validate_planned(
+                d.path(),
+                &[(
+                    "new.handoff.json".to_owned(),
+                    serde_json::json!({"conversation_id":"own-thread"}),
+                )],
+            )
+            .unwrap();
+            assert_eq!(fs::read(&foreign).unwrap(), bytes);
+            assert!(
+                validate_planned(
+                    d.path(),
+                    &[(
+                        "foreign.handoff.json".to_owned(),
+                        serde_json::json!({"conversation_id":"own-thread"})
+                    )]
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn stale_cleanup_requires_complete_valid_id_not_only_prefix() {
+        let d = crate::codex_paths::TempDir::new("owned-stale-strict").unwrap();
+        let path = d.path().join("stale.handoff.json");
+        fs::write(&path, br#"{"conversation_id":"owned","bad":}"#).unwrap();
+        assert!(validate_owned_stale(&path, "owned").is_err());
+        fs::write(&path, br#"{"conversation_id":"foreign","messages":[]}"#).unwrap();
+        assert!(validate_owned_stale(&path, "owned").is_err());
+        fs::write(&path, br#"{"conversation_id":"owned","messages":[]}"#).unwrap();
+        validate_owned_stale(&path, "owned").unwrap();
     }
 
     #[test]
@@ -357,6 +549,16 @@ mod tests {
         let original = d.path().join("data");
         fs::write(&original, r#"{"conversation_id":"same"}"#).unwrap();
         std::os::unix::fs::symlink(&original, d.path().join("x.handoff.json")).unwrap();
-        assert!(validate_existing(d.path(), &HashSet::from(["same".into()]), false).is_err());
+        validate_existing(d.path(), &HashSet::from(["same".into()])).unwrap();
+        assert!(
+            validate_planned(
+                d.path(),
+                &[(
+                    "x.handoff.json".to_string(),
+                    serde_json::json!({"conversation_id":"same"})
+                )]
+            )
+            .is_err()
+        );
     }
 }

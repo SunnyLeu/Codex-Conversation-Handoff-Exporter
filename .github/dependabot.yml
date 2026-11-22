@@ -1,42 +1,47 @@
 version: 2
 updates:
-  # GitHub Actions：追蹤 workflow 內使用的 actions 版本。
-  - package-ecosystem: github-actions
-    directory: /
+  # Rust + Cargo MSRV are updated together by Latest Compatibility.
+  # Do not create a separate rust-toolchain PR that would fail MSRV synchronization.
+  # Cargo and GitHub Actions updates remain managed by Dependabot.
+  # Cargo.lock includes direct, build, target-specific and transitive crates.
+  # Major upgrades remain individual PRs so API/compatibility can be reviewed.
+  - package-ecosystem: "cargo"
+    directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: "daily"
       time: "11:00"
-      timezone: Asia/Taipei
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: ci
-    groups:
-      actions-minor-patch:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-
-  # Cargo：包含直接與間接依賴；移除內建 zstd C 原始碼、改用 Cargo 套件後，
-  # zstd-safe / zstd-sys 才會進入此監控範圍。
-  - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "12:00"
-      timezone: Asia/Taipei
-    open-pull-requests-limit: 5
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 20
+    cooldown:
+      default-days: 1
     allow:
-      - dependency-type: all
+      - dependency-type: "all"
     commit-message:
-      prefix: build
+      prefix: "build"
     groups:
       cargo-minor-patch:
         patterns:
           - "*"
         update-types:
-          - minor
-          - patch
+          - "minor"
+          - "patch"
+
+  # GitHub Actions referenced by .github/workflows/*.yml.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "12:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 10
+    cooldown:
+      default-days: 1
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

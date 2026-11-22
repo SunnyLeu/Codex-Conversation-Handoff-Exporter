@@ -2,4 +2,4 @@
 *.ico binary
 *.zst binary
 
-licenses/Rust-1.98.0-COPYRIGHT-library.html linguist-documentation
+licenses/Rust-1.100.0-COPYRIGHT-library.html linguist-documentation

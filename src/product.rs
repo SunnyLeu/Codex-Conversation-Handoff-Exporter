@@ -5,6 +5,7 @@ use crate::{
     sidebar_targets::{self, Catalogue, Kind, Target},
 };
 use anyhow::{Result, bail};
+use serde_json::json;
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -45,7 +46,7 @@ enum ConfirmResult {
 // The escaped JSON round-trips to the original Unicode; user-facing UI remains
 // unchanged, and the receipt stays one parseable line in any ASCII-compatible
 // native capture path.
-fn machine_receipt_ascii(value: &serde_json::Value) -> String {
+pub(crate) fn machine_receipt_ascii(value: &serde_json::Value) -> String {
     use std::fmt::Write as _;
 
     let json = value.to_string();
@@ -65,42 +66,103 @@ fn machine_receipt_ascii(value: &serde_json::Value) -> String {
 
 pub(crate) fn start(options: ProductOptions) -> i32 {
     let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
-    if !options.yes && !interactive {
-        std::eprintln!(
-            "[錯誤] 非互動環境不能等待人工確認；請明確指定來源、--output-directory 及 --yes。"
-        );
-        return 2;
-    }
     let visual = interactive && !options.yes;
     let mode = crate::platform::ConsoleMode::new(visual);
     let screen = Screen {
         ansi: mode.ansi,
         visual,
     };
-    console_ui::capture();
+    if !console_ui::active() {
+        console_ui::capture();
+    }
+    console_ui::diagnostic(
+        "INFO",
+        "product.mode",
+        json!({
+            "interactive": interactive,
+            "unattended_yes": options.yes,
+            "no_pause": options.no_pause,
+            "project_id": options.project,
+            "thread_id": options.thread,
+            "output_directory": options.output,
+        }),
+    );
+
+    if !options.yes && !interactive {
+        let message = "非互動環境不能等待人工確認；請明確指定來源、--output-directory 及 --yes。";
+        std::eprintln!("[錯誤] {message}");
+        match console_ui::save_diagnostic_log("FAIL", Some(message)) {
+            Ok(path) => std::eprintln!("[DEBUG] 診斷紀錄：{}", path.display()),
+            Err(error) => std::eprintln!("[錯誤] 無法保存診斷紀錄：{error:#}"),
+        }
+        return 2;
+    }
     let result = run(&screen, &options, visual);
     match result {
-        Ok(()) => 0,
+        Ok(()) => {
+            match console_ui::finish_diagnostics("PASS", None) {
+                Ok(Some(path)) => std::eprintln!(
+                    "[DEBUG] 執行中曾發生已處理錯誤，保留完整診斷：{}",
+                    path.display()
+                ),
+                Ok(None) => {} // Successful runs without errors leave no DEBUG file.
+                Err(error) => {
+                    std::eprintln!("[錯誤] 無法保存已發生的錯誤診斷：{error:#}");
+                    return 2;
+                }
+            }
+            0
+        }
         Err(error) => {
+            let code = crate::destination::failure_code(&error);
+            let detailed = format!("{error:#}");
+            console_ui::diagnostic_error("export.failure", code, &error);
+            console_ui::diagnostic(
+                "INFO",
+                "export.failure.write_state",
+                json!({
+                    "completed_final_writes": crate::progress::written(),
+                }),
+            );
             screen.header("匯出未完成");
-            screen.status("失敗", &error.to_string(), 91);
+            screen.status("失敗", "本次匯出已中止，詳細原因：", 91);
+            for line in detailed.lines() {
+                screen.line(line);
+            }
+            screen.line(&format!("錯誤代碼：{code}"));
             screen.line(&format!(
                 "本次已完成最終寫入：{} 份。未宣稱整批回滾；請保留既有輸出供核對。",
                 crate::progress::written()
             ));
-            if let Some(path) = console_ui::save_error_log(&format!("{error:#}")) {
-                screen.line(&format!("診斷紀錄：{}", path.display()));
-            }
+            // stderr is essential when stdout is redirected and the console
+            // window is non-visual, including unattended --yes invocations.
+            std::eprintln!("[匯出失敗] {code}: {detailed}");
+            let log_path = match console_ui::save_diagnostic_log("FAIL", Some(&detailed)) {
+                Ok(path) => {
+                    screen.line(&format!("完整 DEBUG 診斷紀錄：{}", path.display()));
+                    std::eprintln!("[DEBUG] 診斷紀錄：{}", path.display());
+                    Some(path)
+                }
+                Err(log_error) => {
+                    screen.status("紀錄失敗", &format!("{log_error:#}"), 91);
+                    std::eprintln!("[錯誤] 無法保存 DEBUG 診斷紀錄：{log_error:#}");
+                    None
+                }
+            };
             if options.yes {
                 std::println!(
                     "V2_RESULT {}",
-                    machine_receipt_ascii(
-                        &serde_json::json!({"status":"FAIL","version":crate::VERSION,"error":format!("{error:#}"),"completed_writes":crate::progress::written()})
-                    )
+                    machine_receipt_ascii(&serde_json::json!({
+                        "status": "FAIL", "version": crate::VERSION,
+                        "error_code": code, "error": detailed,
+                        "diagnostic_log": log_path,
+                        "completed_writes": crate::progress::written(),
+                    }))
                 );
             }
-            if visual {
+            if interactive && !options.no_pause && !options.yes {
                 crate::platform::clear_input();
+                screen.line("匯出失敗。請先閱讀原因與診斷路徑；按 Q 再按 Enter 才會結束程式。");
                 console_ui::wait_q();
             }
             1
@@ -111,7 +173,24 @@ fn read_catalogue(args: &crate::Args, _screen: &Screen, _visual: bool) -> Result
     // Only lightweight metadata is read here. Do not start the export progress
     // worker (which adds a 120 ms join delay) before the menu is even visible.
     let began = Instant::now();
+    console_ui::diagnostic(
+        "DEBUG",
+        "sidebar.load.begin",
+        json!({
+            "sessions_root": args.sessions_root,
+            "session_index": args.session_index,
+        }),
+    );
     let result = sidebar_targets::load(args);
+    console_ui::diagnostic(
+        "DEBUG",
+        "sidebar.load.finish",
+        json!({
+            "elapsed_ms": began.elapsed().as_secs_f64() * 1000.0,
+            "loaded": result.as_ref().map(|v| v.targets.len()).ok(),
+            "error": result.as_ref().err().map(|e| format!("{e:#}")),
+        }),
+    );
     if std::env::var_os("CODEX_HANDOFF_SIDEBAR_TIMING").is_some() {
         std::println!(
             "SIDEBAR_LOAD_MS={:.3}",
@@ -122,9 +201,23 @@ fn read_catalogue(args: &crate::Args, _screen: &Screen, _visual: bool) -> Result
 }
 fn run(screen: &Screen, options: &ProductOptions, visual: bool) -> Result<()> {
     let mut args = crate::cli::product_args(options)?;
+    console_ui::diagnostic(
+        "DEBUG",
+        "product.configure.begin",
+        json!({
+            "workers": args.workers, "product_mode": args.product_mode,
+        }),
+    );
     crate::configure_runtime(&args);
     crate::configure_attachment_root(&args.attachment_root)?;
     let mut catalogue = read_catalogue(&args, screen, visual)?;
+    console_ui::diagnostic(
+        "INFO",
+        "sidebar.targets",
+        json!({
+            "targets": catalogue.targets.len(), "unavailable": catalogue.unavailable.len(),
+        }),
+    );
     let mut selected = match (&options.project, &options.thread) {
         (Some(id), None) => Some(catalogue.select(Kind::Project, id)?),
         (None, Some(id)) => Some(catalogue.select(Kind::IndependentThread, id)?),
@@ -157,6 +250,14 @@ fn run(screen: &Screen, options: &ProductOptions, visual: bool) -> Result<()> {
             };
             t
         };
+        console_ui::diagnostic(
+            "DEBUG",
+            "product.target.selected",
+            json!({
+                "kind": format!("{:?}", target.kind), "id": target.id,
+                "title": target.title,
+            }),
+        );
         match confirmation(screen, &target, options.output.clone(), &args)? {
             ConfirmResult::Quit => return Ok(()),
             ConfirmResult::Back => {
@@ -362,18 +463,38 @@ fn confirmation(
                             if scope.root_ids.is_empty() {
                                 bail!("此專案目前沒有可匯出的主對話");
                             }
-                            crate::destination::validate_existing(
-                                &p,
-                                &scope.selected_ids,
-                                scope.root_ids.len() == 1,
-                            )?;
+                            crate::destination::validate_existing(&p, &scope.selected_ids)?;
                         }
                     }
                     Ok(p)
                 });
                 match checked {
                     Ok(p) => return Ok(ConfirmResult::Export(p)),
-                    Err(e) => notice = Some((format!("無法使用此目錄：{e:#}"), 93)),
+                    Err(e) => {
+                        let details = format!("{e:#}");
+                        console_ui::diagnostic(
+                            "ERROR",
+                            "destination.confirmation.rejected",
+                            json!({
+                                "error_code": crate::destination::failure_code(&e),
+                                "reason": details, "target_id": target.id,
+                            }),
+                        );
+                        match console_ui::flush_after_error() {
+                            Ok(path) => {
+                                notice = Some((
+                                    format!("無法使用此目錄：{details}。DEBUG：{}", path.display()),
+                                    91,
+                                ))
+                            }
+                            Err(err) => {
+                                notice = Some((
+                                    format!("無法使用此目錄：{details}；診斷檔保存失敗：{err:#}"),
+                                    91,
+                                ))
+                            }
+                        }
+                    }
                 }
             }
             _ => notice = Some(("請使用 F、E、B 或 Q，並按 Enter 確認。".into(), 93)),
@@ -390,6 +511,15 @@ fn execute(
     yes: bool,
 ) -> Result<()> {
     args.output_directory = crate::destination::absolute(output)?;
+    console_ui::diagnostic(
+        "INFO",
+        "export.begin",
+        json!({
+            "target_id": target.id, "target_kind": format!("{:?}", target.kind),
+            "target_title": target.title, "output_directory": args.output_directory,
+            "unattended": yes,
+        }),
+    );
     args.project_id = (target.kind == Kind::Project).then(|| target.id.clone());
     args.thread_id = (target.kind == Kind::IndependentThread).then(|| target.id.clone());
     // An explicit --yes Project/Thread ID is revalidated against live scope
@@ -404,6 +534,12 @@ fn execute(
     let reporter = crate::progress::Reporter::start(screen.ansi, visual);
     let began = Instant::now();
     let result = crate::build_all_candidates(args, true);
+    console_ui::diagnostic(
+        if result.is_ok() { "INFO" } else { "ERROR" },
+        "export.builder.finish",
+        json!({"elapsed_ms": began.elapsed().as_secs_f64() * 1000.0,
+          "error": result.as_ref().err().map(|e| format!("{e:#}"))}),
+    );
     let progress_finish_start = Instant::now();
     reporter.finish();
     let progress_teardown = progress_finish_start.elapsed();

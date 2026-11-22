@@ -1,8 +1,8 @@
 [package]
 name = "codex-conversation-handoff-exporter"
-version = "2.2.0"
+version = "2.3.0"
 edition = "2024"
-rust-version = "1.98"
+rust-version = "1.100.0"
 publish = false
 build = "build.rs"
 description = "Portable Windows x64 Codex conversation-to-Handoff exporter"
@@ -15,21 +15,21 @@ name = "Codex-Conversation-Handoff-Exporter"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-clap = { version = "4", features = ["derive"] }
-rayon = "1"
-indexmap = { version = "2", features = ["serde"] }
-memchr = "2"
-regex = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
-sonic-rs = "0.5.8"
-sha2 = "0.11"
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+clap = { version = "4.6.9", features = ["derive"] }
+rayon = "1.12.0"
+indexmap = { version = "2.14.2", features = ["serde"] }
+memchr = "2.8.3"
+regex = "1.13.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+sonic-rs = "0.5.12"
+sha2 = "0.11.1"
 # Native libzstd is built statically by zstd-sys from the Cargo registry.
 # Never use pkg-config, dynamic DLLs, or the experimental bindgen feature.
-zstd = { version = "0.14", default-features = false, features = ["vendored", "no_asm"] }
-walkdir = "2"
+zstd = { version = "0.14.4", default-features = false, features = ["vendored", "no_asm"] }
+walkdir = "2.5.1"
 windows-sys = { version = "=0.61.2", features = ["Win32_UI_Shell", "Win32_System_Console", "Win32_System_Threading", "Win32_System_Com", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(unix)'.dependencies]

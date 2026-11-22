@@ -16397,10 +16397,22 @@ fn read_existing_exports(directory: &Path) -> HashMap<String, Vec<PathBuf>> {
         match read_existing_conversation_id(&path) {
             Ok(Some(conversation_id)) => result.entry(conversation_id).or_default().push(path),
             Ok(None) => {}
-            Err(error) => eprintln!(
-                "WARNING: Skipping unreadable existing handoff file: {}\n{error:#}",
-                path.display()
-            ),
+            Err(error) => {
+                console_ui::diagnostic_error(
+                    "destination.existing.index_error",
+                    "DESTINATION_EXISTING_INDEX_ERROR",
+                    &error,
+                );
+                console_ui::diagnostic(
+                    "INFO",
+                    "destination.existing.index_error.file",
+                    serde_json::json!({"file": path}),
+                );
+                eprintln!(
+                    "WARNING: Skipping unreadable existing handoff file: {}\n{error:#}",
+                    path.display()
+                );
+            }
         }
     }
     result
@@ -16447,10 +16459,22 @@ fn read_existing_exports_parallel(
         match indexed_id {
             Ok(Some(conversation_id)) => result.entry(conversation_id).or_default().push(path),
             Ok(None) => {}
-            Err(error) => eprintln!(
-                "WARNING: Skipping unreadable existing handoff file: {}\n{error:#}",
-                path.display()
-            ),
+            Err(error) => {
+                console_ui::diagnostic_error(
+                    "destination.existing.index_error",
+                    "DESTINATION_EXISTING_INDEX_ERROR",
+                    &error,
+                );
+                console_ui::diagnostic(
+                    "INFO",
+                    "destination.existing.index_error.file",
+                    serde_json::json!({"file": path}),
+                );
+                eprintln!(
+                    "WARNING: Skipping unreadable existing handoff file: {}\n{error:#}",
+                    path.display()
+                );
+            }
         }
     }
     result
@@ -16928,8 +16952,16 @@ fn export_prebuilt_candidates_parallel(
         for result in prepared_results {
             match result {
                 Ok(item) => prepared.push(item),
-                Err(error) if first_error.is_none() => first_error = Some(error),
-                Err(_) => {}
+                Err(error) => {
+                    console_ui::diagnostic_error(
+                        "export.prepare.failure",
+                        "EXPORT_PREPARE_ERROR",
+                        &error,
+                    );
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
             }
         }
         if let Some(error) = first_error {
@@ -16969,8 +17001,22 @@ fn export_prebuilt_candidates_parallel(
         obsolete_paths.retain(|path| !planned_paths.contains_key(path));
     }
     let obsolete_paths: Vec<PathBuf> = obsolete_paths.into_iter().collect();
+    console_ui::diagnostic(
+        "DEBUG",
+        "destination.cleanup.plan",
+        serde_json::json!({
+            "obsolete_owned_paths": obsolete_paths,
+            "planned_output_count": planned_paths.len(),
+            "policy": "delete only selected session IDs and their integrated children",
+        }),
+    );
     let remove_one = |index: usize| -> Result<()> {
         let old_path = &obsolete_paths[index];
+        console_ui::diagnostic(
+            "DEBUG",
+            "destination.cleanup.attempt",
+            serde_json::json!({"path": old_path}),
+        );
         if legacy_bookkeeping {
             if old_path.is_file() {
                 fs::remove_file(old_path).with_context(|| {
@@ -17020,6 +17066,14 @@ fn export_prebuilt_candidates_parallel(
             fs::remove_file(&item.final_path)
                 .with_context(|| format!("unable to replace {}", item.final_path.display()))?;
         }
+        console_ui::diagnostic(
+            "DEBUG",
+            "destination.finalize.attempt",
+            serde_json::json!({
+                "temporary_path": item.temp_path, "final_path": item.final_path,
+                "bytes_written_to_temp": item.data_len,
+            }),
+        );
         fs::rename(&item.temp_path, &item.final_path).with_context(|| {
             format!(
                 "unable to move {} to {}",
@@ -17031,6 +17085,11 @@ fn export_prebuilt_candidates_parallel(
             set_export_file_timestamps(&item.final_path, item.create_time, item.update_time)?;
         }
         progress::wrote();
+        console_ui::diagnostic(
+            "DEBUG",
+            "destination.finalize.complete",
+            serde_json::json!({"final_path": item.final_path}),
+        );
         Ok(())
     };
     let finalize_results: Vec<Result<()>> = if finalize_lanes == 0 {
@@ -17408,7 +17467,7 @@ fn ensure_existing_handoffs_belong_to_scope(
     output: &Path,
     scope: &project_membership::ProjectScope,
 ) -> Result<()> {
-    destination::validate_existing(output, &scope.selected_ids, scope.root_ids.len() == 1)
+    destination::validate_existing(output, &scope.selected_ids)
 }
 
 fn build_all_candidates(
@@ -17416,6 +17475,19 @@ fn build_all_candidates(
     write_outputs: bool,
 ) -> Result<(Vec<(String, Value)>, RunMetrics)> {
     let total_start = Instant::now();
+    console_ui::diagnostic(
+        "INFO",
+        "builder.start",
+        serde_json::json!({
+            "mode": if args.product_mode { "product" } else { "developer" },
+            "write_outputs": write_outputs,
+            "project_id": args.project_id,
+            "thread_id": args.thread_id,
+            "output_directory": args.output_directory,
+            "sessions_root": args.sessions_root,
+            "worker_count": args.workers,
+        }),
+    );
     progress::stage("檢查來源", 0);
     let target_normalized = normalize_windows_path(&args.target_cwd);
     let attachment_disk_root = if args.product_mode {
@@ -17463,6 +17535,16 @@ fn build_all_candidates(
         (files, input_bytes)
     };
     let discovery = discovery_start.elapsed();
+    console_ui::diagnostic(
+        "DEBUG",
+        "source.discovery.complete",
+        serde_json::json!({
+            "discovered_rollouts": files.len(),
+            "estimated_input_bytes": input_bytes,
+            "title_index_ms": title_index_time.as_secs_f64() * 1000.0,
+            "discovery_ms": discovery.as_secs_f64() * 1000.0,
+        }),
+    );
 
     // One immutable project-membership snapshot per export. Fail before any
     // output write/delete if the Codex project registry is unavailable or
@@ -17520,10 +17602,38 @@ fn build_all_candidates(
                 }
             }
         }
+        console_ui::diagnostic(
+            "INFO",
+            "project.membership.resolved",
+            serde_json::json!({
+                "selected_conversation_ids": scope.selected_ids,
+                "root_conversation_ids": scope.root_ids,
+                "selected_count": scope.selected_ids.len(),
+                "root_count": scope.root_ids.len(),
+                "unattached_guardians_skipped": scope.unattached_guardians_skipped,
+                "allow_other_handoffs_in_directory": true,
+            }),
+        );
         if write_outputs {
             let preflight_start = Instant::now();
+            console_ui::diagnostic(
+                "DEBUG",
+                "destination.preflight.initial.begin",
+                serde_json::json!({
+                    "directory": args.output_directory,
+                    "allowed_conversation_ids": scope.selected_ids,
+                    "root_count": scope.root_ids.len(),
+                }),
+            );
             ensure_existing_handoffs_belong_to_scope(&args.output_directory, &scope)?;
             destination_preflight_initial = preflight_start.elapsed();
+            console_ui::diagnostic(
+                "INFO",
+                "destination.preflight.initial.pass",
+                serde_json::json!({
+                    "elapsed_ms": destination_preflight_initial.as_secs_f64() * 1000.0,
+                }),
+            );
         }
         println!(
             "Project membership: {} explicit roots, {} CWD fallback roots, {} children, {} Guardian; {} metadata-free rollout(s)",
@@ -17700,6 +17810,13 @@ fn build_all_candidates(
             Ok(Some(session)) => {
                 if sessions_by_id.contains_key(&session.session_id) {
                     scan_errors += 1;
+                    console_ui::diagnostic(
+                        "ERROR",
+                        "source.scan.duplicate_session",
+                        serde_json::json!({
+                            "source_path": path, "conversation_id": session.session_id,
+                        }),
+                    );
                     eprintln!(
                         "\n[ERROR] Duplicate parsed logical Session ID {} from {}; refusing silent overwrite",
                         session.session_id,
@@ -17712,6 +17829,16 @@ fn build_all_candidates(
             Ok(None) => {}
             Err(error) => {
                 scan_errors += 1;
+                console_ui::diagnostic_error(
+                    "source.scan.parse_error",
+                    "SOURCE_SESSION_PARSE_ERROR",
+                    &error,
+                );
+                console_ui::diagnostic(
+                    "INFO",
+                    "source.scan.parse_error.file",
+                    serde_json::json!({"source_path": path}),
+                );
                 eprintln!(
                     "\n[ERROR] Stage: Session scan/parse\n[ERROR] Source: {}\n[ERROR] Message: {error:#}",
                     path.display()
@@ -17783,7 +17910,7 @@ fn build_all_candidates(
             );
             allowed.extend(session.internal_session_ids.iter().cloned());
         }
-        destination::validate_existing(&args.output_directory, &allowed, sessions.len() == 1)?;
+        destination::validate_existing(&args.output_directory, &allowed)?;
     }
     progress::stage("建立 Handoff", total_handoffs);
     let candidate_build_start = Instant::now();
@@ -17876,8 +18003,16 @@ fn build_all_candidates(
                     pipeline_prepared.push(prepared);
                 }
             }
-            Err(error) if build_error.is_none() => build_error = Some(error),
-            Err(_) => {}
+            Err(error) => {
+                console_ui::diagnostic_error(
+                    "export.candidate.build_error",
+                    "EXPORT_CANDIDATE_ERROR",
+                    &error,
+                );
+                if build_error.is_none() {
+                    build_error = Some(error);
+                }
+            }
         }
     }
     if let Some(error) = build_error {
@@ -17944,6 +18079,37 @@ fn build_all_candidates(
             read_existing_exports_parallel(&args.output_directory, &pool)
         };
         export_existing_index = existing_index_start.elapsed();
+        // The prefix-based index is not authority to delete any old file.
+        // Confirm the entire JSON and identity of every candidate to be
+        // cleaned. Foreign paths remain completely outside this set.
+        let mut verified_owned_paths = HashSet::new();
+        for session in &sessions {
+            let owned_ids = std::iter::once(session.session_id.as_str())
+                .chain(
+                    session
+                        .subagent_sessions
+                        .iter()
+                        .map(|child| child.session_id.as_str()),
+                )
+                .chain(session.internal_session_ids.iter().map(String::as_str));
+            for id in owned_ids {
+                if let Some(paths) = existing.get(id) {
+                    for path in paths {
+                        if verified_owned_paths.insert(path.clone()) {
+                            destination::validate_owned_stale(path, id)?;
+                        }
+                    }
+                }
+            }
+        }
+        console_ui::diagnostic(
+            "INFO",
+            "destination.cleanup.owned_preflight.pass",
+            serde_json::json!({
+                "verified_owned_path_count": verified_owned_paths.len(),
+                "unrelated_paths_preserved": true,
+            }),
+        );
         if args.legacy_export {
             let mut existing = existing;
             for session in &sessions {
@@ -18010,6 +18176,11 @@ fn build_all_candidates(
                 }
                 Err(error) => {
                     export_errors = 1;
+                    console_ui::diagnostic_error(
+                        "export.parallel.write_error",
+                        "EXPORT_WRITE_ERROR",
+                        &error,
+                    );
                     eprintln!(
                         "\n[ERROR] Stage: Parallel prebuilt export\n[ERROR] Message: {error:#}"
                     );
@@ -18918,7 +19089,7 @@ fn main() {
     std::process::exit(code);
 }
 
-fn legacy_main(args: Args) {
+fn legacy_main(args: Args) -> i32 {
     use std::io::IsTerminal;
     let process_start = Instant::now();
     let should_wait = !args.no_pause && std::io::stdin().is_terminal();
@@ -18937,12 +19108,27 @@ fn legacy_main(args: Args) {
             integrated_study::finish(value, if result.is_ok() { "PASS" } else { "FAIL" })
         {
             eprintln!("[ERROR] study report: {error:#}");
-            std::process::exit(2);
+            console_ui::diagnostic_error(
+                "developer.integrated_study.fail",
+                "STUDY_REPORT_ERROR",
+                &error,
+            );
+            if let Err(log_error) =
+                console_ui::save_diagnostic_log("FAIL", Some(&format!("{error:#}")))
+            {
+                eprintln!("[DEBUG LOGGER ERROR] {log_error:#}");
+            }
+            return 2;
         }
     }
     if let Err(error) = result {
         eprintln!("\n[ERROR] {error:#}");
         eprintln!("[ERROR] Export did not finish cleanly; see diagnostics above.");
+        console_ui::diagnostic_error("developer.export.failure", "DEVELOPER_EXPORT_ERROR", &error);
+        match console_ui::save_diagnostic_log("FAIL", Some(&format!("{error:#}"))) {
+            Ok(path) => eprintln!("[DEBUG] 完整診斷紀錄：{}", path.display()),
+            Err(log_error) => eprintln!("[DEBUG LOGGER ERROR] {log_error:#}"),
+        }
         if should_wait {
             eprintln!(
                 "Press Enter to close this window and keep the error available for copying..."
@@ -18950,7 +19136,7 @@ fn legacy_main(args: Args) {
             let mut line = String::new();
             let _ = std::io::stdin().read_line(&mut line);
         }
-        std::process::exit(1);
+        return 1;
     }
     let total_seconds = process_start.elapsed().as_secs_f64();
     if check_budget {
@@ -18964,6 +19150,15 @@ fn legacy_main(args: Args) {
             // Real export errors still use the error branch above (with Pause).
         }
     }
+    match console_ui::finish_diagnostics("PASS", None) {
+        Ok(Some(path)) => eprintln!("[DEBUG] 執行中有已處理錯誤，已保存：{}", path.display()),
+        Ok(None) => {}
+        Err(error) => {
+            eprintln!("[DEBUG LOGGER ERROR] 無法儲存先前錯誤診斷：{error:#}");
+            return 2;
+        }
+    }
+    0
 }
 
 #[cfg(test)]
@@ -22728,7 +22923,7 @@ text(r);"#;
     }
 
     #[test]
-    fn single_project_allows_foreign_but_rejects_unreadable_handoffs() {
+    fn project_directory_allows_unrelated_handoffs_but_planned_collisions_are_checked() {
         let path =
             std::env::temp_dir().join(format!("universal-output-guard-{}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
@@ -22748,12 +22943,22 @@ text(r);"#;
         let file = path.join("Test.handoff.json");
         fs::write(&file, r#"{"conversation_id":"foreign-root"}"#).unwrap();
         assert!(ensure_existing_handoffs_belong_to_scope(&path, &scope).is_ok());
-        // Multiple output roots preserve the strict previous policy.
-        assert!(destination::validate_existing(&path, &scope.selected_ids, false,).is_err());
+        // Unrelated files must not block project exports merely by existing.
+        assert!(destination::validate_existing(&path, &scope.selected_ids).is_ok());
         fs::write(&file, r#"{"conversation_id":"selected-root"}"#).unwrap();
         assert!(ensure_existing_handoffs_belong_to_scope(&path, &scope).is_ok());
         fs::write(&file, "not-json-or-handoff").unwrap();
-        assert!(ensure_existing_handoffs_belong_to_scope(&path, &scope).is_err());
+        assert!(ensure_existing_handoffs_belong_to_scope(&path, &scope).is_ok());
+        assert!(
+            destination::validate_planned(
+                &path,
+                &[(
+                    "Test.handoff.json".to_string(),
+                    serde_json::json!({"conversation_id":"selected-root"})
+                )]
+            )
+            .is_err()
+        );
         fs::remove_dir_all(path).unwrap();
     }
     #[test]
