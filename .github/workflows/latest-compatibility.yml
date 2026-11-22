@@ -47,18 +47,64 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $output -notmatch '^rustc (\d+\.\d+\.\d+) ') { throw "Unexpected rustc version: $output" }
           $version = $Matches[1]
           "LATEST_RUST=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           Write-Host "Latest stable Rust: $version"
 
-      - name: Install manifest updater (cargo-edit)
+      # Reuse the Cargo registry cache already populated by the main-branch CI.
+      # Do not cache the entire target/ tree: large LTO build outputs can cost
+      # more to transfer than they save on a fresh Windows runner.
+      - name: Restore Cargo package downloads
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-registry-${{ runner.os }}-
+
+      # Use an exact key (OS, architecture, stable Rust version and cargo-edit
+      # version); do not restore a binary built by an incompatible toolchain.
+      - name: Restore pinned cargo-edit executable
+        id: cargo_edit_cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ runner.temp }}/cargo-edit-tool
+          key: cargo-edit-${{ runner.os }}-${{ runner.arch }}-rust-${{ steps.rust.outputs.version }}-0.13.13-v1
+
+      - name: Install or validate cached cargo-edit
         id: cargo_edit
         if: steps.rust.outcome == 'success'
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'cargo-edit-tool'
-          & cargo '+stable' install cargo-edit --version 0.13.13 --locked --root $root
-          if ($LASTEXITCODE -ne 0) { throw 'cargo-edit installation failed' }
           $bin = Join-Path $root 'bin'
+          $exe = Join-Path $bin 'cargo-upgrade.exe'
+          if ('${{ steps.cargo_edit_cache.outputs.cache-hit }}' -ne 'true') {
+            & cargo '+stable' install cargo-edit --version 0.13.13 --locked --root $root
+            if ($LASTEXITCODE -ne 0) { throw 'cargo-edit installation failed' }
+            Write-Host 'cargo-edit cache MISS: compiled pinned version 0.13.13'
+          } else {
+            Write-Host 'cargo-edit cache HIT: compilation skipped'
+          }
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw 'cargo-upgrade.exe is missing after restore/install'
+          }
+          $toolVersion = (& $exe --version) -join ' '
+          if ($LASTEXITCODE -ne 0 -or $toolVersion -notmatch '(?<!\d)0\.13\.13(?!\d)') {
+            throw "Unexpected cargo-edit executable version: $toolVersion"
+          }
+          Write-Host "cargo-edit: $toolVersion"
           $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # Save immediately after a successful install: future runs can reuse it
+      # even when a *new dependency* causes later compatibility tests to fail.
+      - name: Save pinned cargo-edit executable
+        if: steps.cargo_edit_cache.outputs.cache-hit != 'true' && steps.cargo_edit.outcome == 'success'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ runner.temp }}/cargo-edit-tool
+          key: ${{ steps.cargo_edit_cache.outputs.cache-primary-key }}
 
       - name: Synchronize structured Rust version and upgrade ALL Cargo dependencies
         id: resolve
