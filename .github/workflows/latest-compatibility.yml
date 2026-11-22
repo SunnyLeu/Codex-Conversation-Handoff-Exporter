@@ -258,7 +258,7 @@ jobs:
           persist-credentials: false
 
       - name: Download candidate manifest files
-        uses: actions/download-artifact@v7.0.0
+        uses: actions/download-artifact@v8.0.2
         with:
           name: latest-compatibility-candidate
           path: candidate
