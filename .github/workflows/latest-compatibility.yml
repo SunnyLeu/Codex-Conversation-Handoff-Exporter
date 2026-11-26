@@ -6,8 +6,8 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
-# Never publish a release, tag or merge a PR. Test under read-only permissions;
-# the separate write-permission job only files a draft PR with three manifests.
+# Never publish a release, tag or merge a PR. GITHUB_TOKEN stays read-only;
+# only the separate draft-PR job obtains a scoped GitHub App token.
 permissions:
   contents: read
 
@@ -241,15 +241,15 @@ jobs:
           }
 
   create-review-pr:
-    # A different job isolates the write-capable token from crate build scripts.
+    # A different job isolates the write-capable App token from crate build scripts.
     # Only three version manifests are imported; no code from the test job runs here.
-    if: ${{ always() && needs.prepare.outputs.prepared == 'true' && needs.prepare.outputs.has_changes == 'true' }}
+    # Only the trusted main-branch workflow may obtain the App token.
+    if: ${{ always() && github.ref == 'refs/heads/main' && needs.prepare.outputs.prepared == 'true' && needs.prepare.outputs.has_changes == 'true' }}
     needs: prepare
     name: Open or update DRAFT review PR (no merge)
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - name: Checkout trusted main
         uses: actions/checkout@v7.0.1
@@ -304,10 +304,22 @@ jobs:
           unexpected="$(git diff --name-only -- . ':!Cargo.toml' ':!Cargo.lock' ':!rust-toolchain.toml')"
           test -z "$unexpected" || { echo "Unexpected files changed: $unexpected"; exit 1; }
 
+      # Mint only after manifest validation; omitting owner/repositories scopes
+      # the token to this repository. The action revokes it at job completion.
+      - name: Generate repository-scoped GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3.4.0
+        with:
+          client-id: ${{ vars.DEPENDENCY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DEPENDENCY_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create or update DRAFT PR; never merge or publish
         uses: peter-evans/create-pull-request@v8.1.3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
+          branch-token: ${{ steps.app-token.outputs.token }}
           base: main
           branch: automation/latest-rust-cargo-compatibility
           add-paths: |
@@ -326,6 +338,6 @@ jobs:
             - Windows rustfmt / Clippy / unit / Release / 11 synthetic EXE + subagent + Schema and attachment tests: **${{ needs.prepare.outputs.test_status }}** in the originating Latest Compatibility workflow.
             - No README, release version, native library license, GitHub Release or Git tag was updated.
             - The workflow's test result and executable logs are preserved as artifacts.
-            - GitHub Actions workflow-created PRs may require manual approval to run their own CI.
+            - Created or updated using a scoped GitHub App token so PR CI can run automatically; no manual CI approval is intended.
 
             **Local Windows qualification and review are mandatory. No auto-merge or auto-release.**
