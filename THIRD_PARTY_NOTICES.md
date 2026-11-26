@@ -1,4 +1,4 @@
-# Third-party notices — Codex Conversation Handoff Exporter 2.3.0
+# Third-party notices — Codex Conversation Handoff Exporter 2.3.1
 
 This application is MIT-licensed. Each listed dependency retains its own upstream license.
 The inventory below is derived from the locked Cargo dependency graph and the exact vendored sources.
@@ -8,14 +8,14 @@ It includes build-only and platform-specific dependencies as well as native Zsta
 
 Rust 1.100.0 standard library: `licenses/Rust-1.100.0-*`.
 Noto Emoji derived icon: `assets/LICENSE-NOTO-EMOJI-SVG.txt`.
-Zstandard native sources are provided by Cargo-managed `zstd-sys`, statically linked.
+Zstandard 1.6.0 native sources are provided by Cargo-managed `zstd-sys` 2.2.0+zstd.1.6.0, statically linked.
 See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 
 ## Locked dependency inventory
 
 | Package | Version | Upstream license expression |
 |---|---|---|
-| `ahash` | `0.8.12` | MIT OR Apache-2.0 |
+| `ahash` | `0.8.14` | MIT OR Apache-2.0 |
 | `aho-corasick` | `1.1.5` | Unlicense OR MIT |
 | `android_system_properties` | `0.1.6` | MIT OR Apache-2.0 |
 | `anstream` | `1.0.0` | MIT OR Apache-2.0 |
@@ -23,7 +23,7 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `anstyle-parse` | `1.0.0` | MIT OR Apache-2.0 |
 | `anstyle-query` | `1.1.5` | MIT OR Apache-2.0 |
 | `anstyle-wincon` | `3.0.11` | MIT OR Apache-2.0 |
-| `anyhow` | `1.0.104` | MIT OR Apache-2.0 |
+| `anyhow` | `1.0.105` | MIT OR Apache-2.0 |
 | `autocfg` | `1.5.1` | Apache-2.0 OR MIT |
 | `block-buffer` | `0.12.1` | MIT OR Apache-2.0 |
 | `bumpalo` | `3.20.4` | MIT OR Apache-2.0 |
@@ -31,8 +31,8 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `cc` | `1.11.3` | MIT OR Apache-2.0 |
 | `cfg-if` | `1.0.5` | MIT OR Apache-2.0 |
 | `chrono` | `0.4.45` | MIT OR Apache-2.0 |
-| `clap` | `4.6.9` | MIT OR Apache-2.0 |
-| `clap_builder` | `4.6.7` | MIT OR Apache-2.0 |
+| `clap` | `4.6.10` | MIT OR Apache-2.0 |
+| `clap_builder` | `4.6.10` | MIT OR Apache-2.0 |
 | `clap_derive` | `4.6.9` | MIT OR Apache-2.0 |
 | `clap_lex` | `1.1.2` | MIT OR Apache-2.0 |
 | `colorchoice` | `1.0.5` | MIT OR Apache-2.0 |
@@ -52,7 +52,6 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `futures-core` | `0.3.34` | MIT OR Apache-2.0 |
 | `futures-task` | `0.3.34` | MIT OR Apache-2.0 |
 | `futures-util` | `0.3.34` | MIT OR Apache-2.0 |
-| `getrandom` | `0.3.4` | MIT OR Apache-2.0 |
 | `getrandom` | `0.4.3` | MIT OR Apache-2.0 |
 | `hashbrown` | `0.17.2` | MIT OR Apache-2.0 |
 | `heck` | `0.5.0` | MIT OR Apache-2.0 |
@@ -78,7 +77,6 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `ptr_meta` | `0.3.2` | MIT |
 | `ptr_meta_derive` | `0.3.2` | MIT |
 | `quote` | `1.0.47` | MIT OR Apache-2.0 |
-| `r-efi` | `5.3.0` | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
 | `r-efi` | `6.0.0` | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
 | `rancor` | `0.1.3` | MIT |
 | `rayon` | `1.12.0` | MIT OR Apache-2.0 |
@@ -98,7 +96,7 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `serde_derive` | `1.0.229` | MIT OR Apache-2.0 |
 | `serde_json` | `1.0.154` | MIT OR Apache-2.0 |
 | `serde_spanned` | `1.1.3` | MIT OR Apache-2.0 |
-| `sha2` | `0.11.1` | MIT OR Apache-2.0 |
+| `sha2` | `0.11.2` | MIT OR Apache-2.0 |
 | `shlex` | `2.0.1` | MIT OR Apache-2.0 |
 | `simdutf8` | `0.1.5` | MIT OR Apache-2.0 |
 | `slab` | `0.4.12` | MIT |
@@ -111,9 +109,9 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `thiserror` | `2.0.21` | MIT OR Apache-2.0 |
 | `thiserror-impl` | `2.0.21` | MIT OR Apache-2.0 |
 | `tinyvec` | `1.13.3` | Zlib OR Apache-2.0 OR MIT |
-| `toml` | `1.2.2+spec-1.1.0` | MIT OR Apache-2.0 |
+| `toml` | `1.2.3+spec-1.1.0` | MIT OR Apache-2.0 |
 | `toml_datetime` | `1.1.3+spec-1.1.0` | MIT OR Apache-2.0 |
-| `toml_parser` | `1.1.6+spec-1.1.0` | MIT OR Apache-2.0 |
+| `toml_parser` | `1.1.7+spec-1.1.0` | MIT OR Apache-2.0 |
 | `toml_writer` | `1.2.0+spec-1.1.0` | MIT OR Apache-2.0 |
 | `typenum` | `1.20.1` | MIT OR Apache-2.0 |
 | `unicode-ident` | `1.0.27` | (MIT OR Apache-2.0) AND Unicode-3.0 |
@@ -121,7 +119,6 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `uuid` | `1.29.3` | Apache-2.0 OR MIT |
 | `version_check` | `0.9.5` | MIT/Apache-2.0 |
 | `walkdir` | `2.5.1` | Unlicense/MIT |
-| `wasip2` | `1.0.4+wasi-0.2.12` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `wasm-bindgen` | `0.2.130` | MIT OR Apache-2.0 |
 | `wasm-bindgen-macro` | `0.2.130` | MIT OR Apache-2.0 |
 | `wasm-bindgen-macro-support` | `0.2.130` | MIT OR Apache-2.0 |
@@ -136,13 +133,12 @@ See `licenses/Zstandard-LICENSE.txt` and the complete upstream notices below.
 | `windows-sys` | `0.61.2` | MIT OR Apache-2.0 |
 | `winnow` | `1.0.5` | MIT |
 | `winresource` | `0.1.34` | MIT |
-| `wit-bindgen` | `0.57.1` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
-| `zerocopy` | `0.8.64` | BSD-2-Clause OR Apache-2.0 OR MIT |
-| `zerocopy-derive` | `0.8.64` | BSD-2-Clause OR Apache-2.0 OR MIT |
+| `zerocopy` | `0.8.66` | BSD-2-Clause OR Apache-2.0 OR MIT |
+| `zerocopy-derive` | `0.8.66` | BSD-2-Clause OR Apache-2.0 OR MIT |
 | `zmij` | `1.0.23` | MIT |
-| `zstd` | `0.14.4` | BSD-3-Clause |
-| `zstd-safe` | `8.3.0` | BSD-3-Clause |
-| `zstd-sys` | `2.1.3+zstd.1.5.7` | BSD-3-Clause AND BSD-2-Clause |
+| `zstd` | `0.14.5` | BSD-3-Clause |
+| `zstd-safe` | `8.4.0` | BSD-3-Clause |
+| `zstd-sys` | `2.2.0+zstd.1.6.0` | BSD-3-Clause AND BSD-2-Clause |
 
 ## Complete upstream license and notice files
 
@@ -164,7 +160,7 @@ You may use this code under the terms of either license.
 
 ### License text 2 (SHA-256 `0444c6991eead6822f7b9102e654448d51624431119546492e8b231db42c48bb`)
 
-- `ahash` `0.8.12`: `LICENSE-MIT`
+- `ahash` `0.8.14`: `LICENSE-MIT`
 
 ````text
 Copyright (c) 2018 Tom Kaitchuck
@@ -868,8 +864,8 @@ SOFTWARE.
 
 ### License text 10 (SHA-256 `1a2f5c12ddc934d58956aa5dbdd3255fe55fd957633ab7d0d39e4f0daa73f7df`)
 
-- `zerocopy` `0.8.64`: `LICENSE-MIT`
-- `zerocopy-derive` `0.8.64`: `LICENSE-MIT`
+- `zerocopy` `0.8.66`: `LICENSE-MIT`
+- `zerocopy-derive` `0.8.66`: `LICENSE-MIT`
 
 ````text
 Copyright 2023 The Fuchsia Authors
@@ -951,7 +947,7 @@ limitations under the License.
 
 ### License text 13 (SHA-256 `23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3`)
 
-- `anyhow` `1.0.104`: `LICENSE-MIT`
+- `anyhow` `1.0.105`: `LICENSE-MIT`
 - `itoa` `1.0.19`: `LICENSE-MIT`
 - `once_cell` `1.21.4`: `LICENSE-MIT`
 - `pin-project-lite` `0.2.18`: `LICENSE-MIT`
@@ -970,8 +966,6 @@ limitations under the License.
 - `thiserror` `2.0.21`: `LICENSE-MIT`
 - `thiserror-impl` `2.0.21`: `LICENSE-MIT`
 - `unicode-ident` `1.0.27`: `LICENSE-MIT`
-- `wasip2` `1.0.4+wasi-0.2.12`: `LICENSE-MIT`
-- `wit-bindgen` `0.57.1`: `LICENSE-MIT`
 - `zmij` `1.0.23`: `LICENSE-MIT`
 
 ````text
@@ -1002,14 +996,14 @@ DEALINGS IN THE SOFTWARE.
 
 ### License text 14 (SHA-256 `249fdb6694467dd615b259f7ddde07be3f8ae5a72cecebb0e24f6629af4215fe`)
 
-- `clap` `4.6.9`: `LICENSE-APACHE`
-- `clap_builder` `4.6.7`: `LICENSE-APACHE`
+- `clap` `4.6.10`: `LICENSE-APACHE`
+- `clap_builder` `4.6.10`: `LICENSE-APACHE`
 - `clap_derive` `4.6.9`: `LICENSE-APACHE`
 - `clap_lex` `1.1.2`: `LICENSE-APACHE`
 - `serde_spanned` `1.1.3`: `LICENSE-APACHE`
-- `toml` `1.2.2+spec-1.1.0`: `LICENSE-APACHE`
+- `toml` `1.2.3+spec-1.1.0`: `LICENSE-APACHE`
 - `toml_datetime` `1.1.3+spec-1.1.0`: `LICENSE-APACHE`
-- `toml_parser` `1.1.6+spec-1.1.0`: `LICENSE-APACHE`
+- `toml_parser` `1.1.7+spec-1.1.0`: `LICENSE-APACHE`
 - `toml_writer` `1.2.0+spec-1.1.0`: `LICENSE-APACHE`
 
 ````text
@@ -1216,234 +1210,7 @@ DEALINGS IN THE SOFTWARE.
    limitations under the License.
 ````
 
-### License text 15 (SHA-256 `268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5`)
-
-- `wasip2` `1.0.4+wasi-0.2.12`: `LICENSE-Apache-2.0_WITH_LLVM-exception`
-- `wit-bindgen` `0.57.1`: `LICENSE-Apache-2.0_WITH_LLVM-exception`
-
-````text
-
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-   END OF TERMS AND CONDITIONS
-
-   APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-
---- LLVM Exceptions to the Apache 2.0 License ----
-
-As an exception, if, as a result of your compiling your source code, portions
-of this Software are embedded into an Object form of such source code, you
-may redistribute such embedded portions in such Object form without complying
-with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
-
-In addition, if you combine or link compiled forms of this Software with
-software that is licensed under the GPLv2 ("Combined Software") and if a
-court of competent jurisdiction determines that the patent provision (Section
-3), the indemnity provision (Section 9) or other Section of the License
-conflicts with the conditions of the GPLv2, you may retroactively and
-prospectively choose to deem waived or otherwise exclude such Section(s) of
-the License, but only in their entirety and only with respect to the Combined
-Software.
-````
-
-### License text 16 (SHA-256 `275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427`)
+### License text 15 (SHA-256 `275c491d6d1160553c32fd6127061d7f9606c3ea25abfad6ca3f6ed088785427`)
 
 - `futures-core` `0.3.34`: `LICENSE-APACHE`
 - `futures-task` `0.3.34`: `LICENSE-APACHE`
@@ -1654,7 +1421,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### License text 17 (SHA-256 `27995d58ad5c1145c1a8cd86244ce844886958a35eb2b78c6b772748669999ac`)
+### License text 16 (SHA-256 `27995d58ad5c1145c1a8cd86244ce844886958a35eb2b78c6b772748669999ac`)
 
 - `autocfg` `1.5.1`: `LICENSE-MIT`
 
@@ -1686,40 +1453,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 18 (SHA-256 `29e9fe5074bd27e0e5d5d110394fbbcd841baee2651a3c4b4560a632702cede4`)
-
-- `getrandom` `0.3.4`: `LICENSE-MIT`
-
-````text
-Copyright (c) 2018-2025 The rust-random Project Developers
-Copyright (c) 2014 The Rust Project Developers
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-````
-
-### License text 19 (SHA-256 `30fefc3a7d6a0041541858293bcbea2dde4caa4c0a5802f996a7f7e8c0085652`)
+### License text 17 (SHA-256 `30fefc3a7d6a0041541858293bcbea2dde4caa4c0a5802f996a7f7e8c0085652`)
 
 - `rkyv_derive` `0.8.18`: `src/serde/LICENSE`
 
@@ -1749,7 +1483,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 20 (SHA-256 `3564da09711c475669c15346bb25a1530a7de683c13f4a51489c15a6d74438fa`)
+### License text 18 (SHA-256 `3564da09711c475669c15346bb25a1530a7de683c13f4a51489c15a6d74438fa`)
 
 - `winresource` `0.1.34`: `LICENSE`
 
@@ -1781,7 +1515,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 21 (SHA-256 `378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397`)
+### License text 19 (SHA-256 `378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397`)
 
 - `cc` `1.11.3`: `LICENSE-MIT`
 - `cfg-if` `1.0.5`: `LICENSE-MIT`
@@ -1822,7 +1556,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 22 (SHA-256 `43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1`)
+### License text 20 (SHA-256 `43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1`)
 
 - `sonic-number` `0.1.3`: `LICENSE`
 - `sonic-rs` `0.5.12`: `LICENSE`
@@ -2032,7 +1766,7 @@ DEALINGS IN THE SOFTWARE.
    limitations under the License.
 ````
 
-### License text 23 (SHA-256 `43293fded4890ea79c7ec12e41c644524063cac78f44ab52c4deba169fc4c13f`)
+### License text 21 (SHA-256 `43293fded4890ea79c7ec12e41c644524063cac78f44ab52c4deba169fc4c13f`)
 
 - `sonic-number` `0.1.3`: `licenses/LICENSE-sonic_cpp`
 - `sonic-rs` `0.5.12`: `licenses/LICENSE-sonic_cpp`
@@ -2241,7 +1975,7 @@ DEALINGS IN THE SOFTWARE.
    limitations under the License.
 ````
 
-### License text 24 (SHA-256 `436bc5a105d8e57dcd8778730f3754f7bf39c14d2f530e4cde4bd2d17a83ec3d`)
+### License text 22 (SHA-256 `436bc5a105d8e57dcd8778730f3754f7bf39c14d2f530e4cde4bd2d17a83ec3d`)
 
 - `uuid` `1.29.3`: `LICENSE-MIT`
 
@@ -2274,7 +2008,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 25 (SHA-256 `4455bf75a91154108304cb283e0fea9948c14f13e20d60887cf2552449dea3b1`)
+### License text 23 (SHA-256 `4455bf75a91154108304cb283e0fea9948c14f13e20d60887cf2552449dea3b1`)
 
 - `shlex` `2.0.1`: `LICENSE-MIT`
 
@@ -2302,7 +2036,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ````
 
-### License text 26 (SHA-256 `45f522cacecb1023856e46df79ca625dfc550c94910078bd8aec6e02880b3d42`)
+### License text 24 (SHA-256 `45f522cacecb1023856e46df79ca625dfc550c94910078bd8aec6e02880b3d42`)
 
 - `bytes` `1.12.2`: `LICENSE`
 
@@ -2334,7 +2068,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 27 (SHA-256 `516b24e051bf5630880ebbd55c40a25ce9552ebaf8970a53e8976eb70e522406`)
+### License text 25 (SHA-256 `516b24e051bf5630880ebbd55c40a25ce9552ebaf8970a53e8976eb70e522406`)
 
 - `typenum` `1.20.1`: `LICENSE-APACHE`
 
@@ -2542,7 +2276,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### License text 28 (SHA-256 `523a42c25d245dde9c015f882cec7f4555aad883382a6cf19b4b7d9b2cd5419b`)
+### License text 26 (SHA-256 `523a42c25d245dde9c015f882cec7f4555aad883382a6cf19b4b7d9b2cd5419b`)
 
 - `getrandom` `0.4.3`: `LICENSE-MIT`
 
@@ -2575,7 +2309,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 29 (SHA-256 `553fffcd9b1cb158bc3e9edc35da85ca5c3b3d7d2e61c883ebcfa8a65814b583`)
+### License text 27 (SHA-256 `553fffcd9b1cb158bc3e9edc35da85ca5c3b3d7d2e61c883ebcfa8a65814b583`)
 
 - `shlex` `2.0.1`: `LICENSE-APACHE`
 
@@ -2595,7 +2329,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### License text 30 (SHA-256 `5734ed989dfca1f625b40281ee9f4530f91b2411ec01cb748223e7eb87e201ab`)
+### License text 28 (SHA-256 `5734ed989dfca1f625b40281ee9f4530f91b2411ec01cb748223e7eb87e201ab`)
 
 - `crossbeam-deque` `0.8.8`: `LICENSE-MIT`
 - `crossbeam-epoch` `0.9.21`: `LICENSE-MIT`
@@ -2631,7 +2365,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 31 (SHA-256 `62065228e42caebca7e7d7db1204cbb867033de5982ca4009928915e4095f3a3`)
+### License text 29 (SHA-256 `62065228e42caebca7e7d7db1204cbb867033de5982ca4009928915e4095f3a3`)
 
 - `core-foundation-sys` `0.8.7`: `LICENSE-MIT`
 
@@ -2663,9 +2397,9 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 32 (SHA-256 `62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a`)
+### License text 30 (SHA-256 `62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a`)
 
-- `anyhow` `1.0.104`: `LICENSE-APACHE`
+- `anyhow` `1.0.105`: `LICENSE-APACHE`
 - `itoa` `1.0.19`: `LICENSE-APACHE`
 - `libc` `0.2.191`: `LICENSE-APACHE`
 - `proc-macro2` `1.0.107`: `LICENSE-APACHE`
@@ -2866,7 +2600,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 ````
 
-### License text 33 (SHA-256 `635111a955495b5d8d34b8052f69656e8e45f6437f9266329077b9aad5fbe8d3`)
+### License text 31 (SHA-256 `635111a955495b5d8d34b8052f69656e8e45f6437f9266329077b9aad5fbe8d3`)
 
 - `ptr_meta` `0.3.2`: `LICENSE`
 - `ptr_meta_derive` `0.3.2`: `LICENSE`
@@ -2884,7 +2618,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 34 (SHA-256 `6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb`)
+### License text 32 (SHA-256 `6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb`)
 
 - `log` `0.4.35`: `LICENSE-MIT`
 - `num-traits` `0.2.19`: `LICENSE-MIT`
@@ -2920,7 +2654,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 35 (SHA-256 `65f94e99ddaf4f5d1782a6dae23f35d4293a9a01444a13135a6887017d353cee`)
+### License text 33 (SHA-256 `65f94e99ddaf4f5d1782a6dae23f35d4293a9a01444a13135a6887017d353cee`)
 
 - `bumpalo` `3.20.4`: `LICENSE-MIT`
 
@@ -2952,7 +2686,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 36 (SHA-256 `664f4e8a5ae846b8a94960da2418187c0b4176d64266ba5fdb8316a8ddf50f27`)
+### License text 34 (SHA-256 `664f4e8a5ae846b8a94960da2418187c0b4176d64266ba5fdb8316a8ddf50f27`)
 
 - `sonic-rs` `0.5.12`: `licenses/LICENSE-simdjson`
 
@@ -3145,7 +2879,7 @@ DEALINGS IN THE SOFTWARE.
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright 2018-2019 The simdjson authors 
+   Copyright 2018-2019 The simdjson authors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -3160,7 +2894,7 @@ DEALINGS IN THE SOFTWARE.
    limitations under the License.
 ````
 
-### License text 37 (SHA-256 `6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd`)
+### License text 35 (SHA-256 `6652c868f35dfe5e8ef636810a4e576b9d663f3a17fb0f5613ad73583e1b88fd`)
 
 - `futures-core` `0.3.34`: `LICENSE-MIT`
 - `futures-task` `0.3.34`: `LICENSE-MIT`
@@ -3195,7 +2929,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 38 (SHA-256 `696759d65dfe558ff7d9f031c76db19ec5c0767470fb67c4e8d990820d1e99c9`)
+### License text 36 (SHA-256 `696759d65dfe558ff7d9f031c76db19ec5c0767470fb67c4e8d990820d1e99c9`)
 
 - `iana-time-zone` `0.1.65`: `LICENSE-APACHE`
 - `iana-time-zone-haiku` `0.1.2`: `LICENSE-APACHE`
@@ -3404,24 +3138,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### License text 39 (SHA-256 `6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6`)
+### License text 37 (SHA-256 `6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6`)
 
 - `anstream` `1.0.0`: `LICENSE-MIT`
 - `anstyle` `1.0.14`: `LICENSE-MIT`
 - `anstyle-parse` `1.0.0`: `LICENSE-MIT`
 - `anstyle-query` `1.1.5`: `LICENSE-MIT`
 - `anstyle-wincon` `3.0.11`: `LICENSE-MIT`
-- `clap` `4.6.9`: `LICENSE-MIT`
-- `clap_builder` `4.6.7`: `LICENSE-MIT`
+- `clap` `4.6.10`: `LICENSE-MIT`
+- `clap_builder` `4.6.10`: `LICENSE-MIT`
 - `clap_derive` `4.6.9`: `LICENSE-MIT`
 - `clap_lex` `1.1.2`: `LICENSE-MIT`
 - `colorchoice` `1.0.5`: `LICENSE-MIT`
 - `is_terminal_polyfill` `1.70.2`: `LICENSE-MIT`
 - `once_cell_polyfill` `1.70.2`: `LICENSE-MIT`
 - `serde_spanned` `1.1.3`: `LICENSE-MIT`
-- `toml` `1.2.2+spec-1.1.0`: `LICENSE-MIT`
+- `toml` `1.2.3+spec-1.1.0`: `LICENSE-MIT`
 - `toml_datetime` `1.1.3+spec-1.1.0`: `LICENSE-MIT`
-- `toml_parser` `1.1.6+spec-1.1.0`: `LICENSE-MIT`
+- `toml_parser` `1.1.7+spec-1.1.0`: `LICENSE-MIT`
 - `toml_writer` `1.2.0+spec-1.1.0`: `LICENSE-MIT`
 
 ````text
@@ -3446,9 +3180,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### License text 40 (SHA-256 `7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8`)
+### License text 38 (SHA-256 `7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8`)
 
-- `zstd-sys` `2.1.3+zstd.1.5.7`: `zstd/LICENSE`
+- `zstd-sys` `2.2.0+zstd.1.6.0`: `zstd/LICENSE`
 
 ````text
 BSD License
@@ -3483,7 +3217,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### License text 41 (SHA-256 `70c9d40f1f9545c3f133b8a67206e89da850f6468eed072281bb3701514114a9`)
+### License text 39 (SHA-256 `70c9d40f1f9545c3f133b8a67206e89da850f6468eed072281bb3701514114a9`)
 
 - `hybrid-array` `0.4.15`: `LICENSE-MIT`
 
@@ -3515,7 +3249,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 42 (SHA-256 `734d7fb3eb56f0a04e6b7ab0c5d3634624a8bfaa2acc87a2c03a029b20868cf8`)
+### License text 40 (SHA-256 `734d7fb3eb56f0a04e6b7ab0c5d3634624a8bfaa2acc87a2c03a029b20868cf8`)
 
 - `sonic-number` `0.1.3`: `licenses/LICENSE-yyjson`
 - `sonic-rs` `0.5.12`: `licenses/LICENSE-yyjson`
@@ -3544,7 +3278,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### License text 43 (SHA-256 `7365cc8878a1d7ce155a58c4ca09c3d7a6be413efa5334a80ea842912b669349`)
+### License text 41 (SHA-256 `7365cc8878a1d7ce155a58c4ca09c3d7a6be413efa5334a80ea842912b669349`)
 
 - `equivalent` `1.0.3`: `LICENSE-MIT`
 
@@ -3576,7 +3310,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 44 (SHA-256 `73b9dc2e79c7308998dd30296e073aefaefb944a68fb89aa412c23c0edcabcaa`)
+### License text 42 (SHA-256 `73b9dc2e79c7308998dd30296e073aefaefb944a68fb89aa412c23c0edcabcaa`)
 
 - `const-oid` `0.10.3`: `LICENSE-MIT`
 - `cpufeatures` `0.3.1`: `LICENSE-MIT`
@@ -3609,7 +3343,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 45 (SHA-256 `744ba853c063f56a8d79385406413e5e3600adbc6aae359c74022701fb55a42a`)
+### License text 43 (SHA-256 `744ba853c063f56a8d79385406413e5e3600adbc6aae359c74022701fb55a42a`)
 
 - `rancor` `0.1.3`: `LICENSE`
 
@@ -3623,7 +3357,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 46 (SHA-256 `74db5baf44a41b1000312c673544b3374e4198af5605c7f9080a402cec42cfa3`)
+### License text 44 (SHA-256 `74db5baf44a41b1000312c673544b3374e4198af5605c7f9080a402cec42cfa3`)
 
 - `regex-syntax` `0.8.12`: `src/unicode_tables/LICENSE-UNICODE`
 
@@ -3687,7 +3421,7 @@ use or other dealings in these Data Files or Software without prior
 written authorization of the copyright holder.
 ````
 
-### License text 47 (SHA-256 `7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545`)
+### License text 45 (SHA-256 `7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545`)
 
 - `either` `1.19.0`: `LICENSE-MIT`
 
@@ -3719,7 +3453,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 48 (SHA-256 `7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0`)
+### License text 46 (SHA-256 `7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0`)
 
 - `heck` `0.5.0`: `LICENSE-MIT`
 
@@ -3751,7 +3485,42 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 49 (SHA-256 `80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e`)
+### License text 47 (SHA-256 `7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c`)
+
+- `aho-corasick` `1.1.5`: `UNLICENSE`
+- `memchr` `2.8.3`: `UNLICENSE`
+- `same-file` `1.0.6`: `UNLICENSE`
+- `walkdir` `2.5.1`: `UNLICENSE`
+- `winapi-util` `0.1.11`: `UNLICENSE`
+
+````text
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <http://unlicense.org/>
+````
+
+### License text 48 (SHA-256 `80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e`)
 
 - `android_system_properties` `0.1.6`: `LICENSE-MIT`
 
@@ -3778,9 +3547,9 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 50 (SHA-256 `831e0f43ad0bf014c1c4fec5767aae470434c1d66d6e671be2d823e729063e25`)
+### License text 49 (SHA-256 `831e0f43ad0bf014c1c4fec5767aae470434c1d66d6e671be2d823e729063e25`)
 
-- `sha2` `0.11.1`: `LICENSE-MIT`
+- `sha2` `0.11.2`: `LICENSE-MIT`
 
 ````text
 Copyright (c) 2016-2026 The RustCrypto Project Developers
@@ -3813,10 +3582,10 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 51 (SHA-256 `83c1763356e822adde0a2cae748d938a73fdc263849ccff6b27776dff213bd32`)
+### License text 50 (SHA-256 `83c1763356e822adde0a2cae748d938a73fdc263849ccff6b27776dff213bd32`)
 
-- `zerocopy` `0.8.64`: `LICENSE-BSD`
-- `zerocopy-derive` `0.8.64`: `LICENSE-BSD`
+- `zerocopy` `0.8.66`: `LICENSE-BSD`
+- `zerocopy-derive` `0.8.66`: `LICENSE-BSD`
 
 ````text
 Copyright 2019 The Fuchsia Authors.
@@ -3845,7 +3614,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### License text 52 (SHA-256 `84b34dd7608f7fb9b17bd588a6bf392bf7de504e2716f024a77d89f1b145a151`)
+### License text 51 (SHA-256 `84b34dd7608f7fb9b17bd588a6bf392bf7de504e2716f024a77d89f1b145a151`)
 
 - `tinyvec` `1.13.3`: `LICENSE-ZLIB.md`
 
@@ -3863,7 +3632,7 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ````
 
-### License text 53 (SHA-256 `8bd0e0578be788c617ea01d18b2a8146e3746ae50bddadc65a5f9d3aad08ad49`)
+### License text 52 (SHA-256 `8bd0e0578be788c617ea01d18b2a8146e3746ae50bddadc65a5f9d3aad08ad49`)
 
 - `sonic-rs` `0.5.12`: `tests/testdata/json_test_suite/LICENSE`
 
@@ -3891,7 +3660,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### License text 54 (SHA-256 `8ce0830173fdac609dfb4ea603fdc002c2f4af0dc9b1a005653f5da9cf534b18`)
+### License text 53 (SHA-256 `8ce0830173fdac609dfb4ea603fdc002c2f4af0dc9b1a005653f5da9cf534b18`)
 
 - `slab` `0.4.12`: `LICENSE`
 
@@ -3923,7 +3692,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 55 (SHA-256 `946c9835d8034d24404f8cfec5f4654cee5dad17e944afc3d06d742cf2882831`)
+### License text 54 (SHA-256 `946c9835d8034d24404f8cfec5f4654cee5dad17e944afc3d06d742cf2882831`)
 
 - `chrono` `0.4.45`: `LICENSE.txt`
 
@@ -4169,7 +3938,7 @@ limitations under the License.
 ~~~~
 ````
 
-### License text 56 (SHA-256 `98181e7249d0c01737645ec982499ce99a0f07eb8f7d625b8840d799d10dbc01`)
+### License text 55 (SHA-256 `98181e7249d0c01737645ec982499ce99a0f07eb8f7d625b8840d799d10dbc01`)
 
 - `block-buffer` `0.12.1`: `LICENSE-MIT`
 
@@ -4201,9 +3970,9 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 57 (SHA-256 `982cd76c8a6b5c597aa999be672c4f16b953eb6d074fe29c0a931d7aae2c8fc2`)
+### License text 56 (SHA-256 `982cd76c8a6b5c597aa999be672c4f16b953eb6d074fe29c0a931d7aae2c8fc2`)
 
-- `zstd-sys` `2.1.3+zstd.1.5.7`: `LICENSE.BSD-2-Clause`
+- `zstd-sys` `2.2.0+zstd.1.6.0`: `LICENSE.BSD-2-Clause`
 
 ````text
 The decoders for legacy formats, in zstd/lib/legacy/, include code under the
@@ -4237,10 +4006,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### License text 58 (SHA-256 `9d185ac6703c4b0453974c0d85e9eee43e6941009296bb1f5eb0b54e2329e9f3`)
+### License text 57 (SHA-256 `9d185ac6703c4b0453974c0d85e9eee43e6941009296bb1f5eb0b54e2329e9f3`)
 
-- `zerocopy` `0.8.64`: `LICENSE-APACHE`
-- `zerocopy-derive` `0.8.64`: `LICENSE-APACHE`
+- `zerocopy` `0.8.66`: `LICENSE-APACHE`
+- `zerocopy-derive` `0.8.66`: `LICENSE-APACHE`
 
 ````text
                                  Apache License
@@ -4446,9 +4215,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    limitations under the License.
 ````
 
-### License text 59 (SHA-256 `a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2`)
+### License text 58 (SHA-256 `a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2`)
 
-- `ahash` `0.8.12`: `LICENSE-APACHE`
+- `ahash` `0.8.14`: `LICENSE-APACHE`
 - `autocfg` `1.5.1`: `LICENSE-APACHE`
 - `bumpalo` `3.20.4`: `LICENSE-APACHE`
 - `cc` `1.11.3`: `LICENSE-APACHE`
@@ -4476,12 +4245,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 - `regex-syntax` `0.8.12`: `LICENSE-APACHE`
 - `uuid` `1.29.3`: `LICENSE-APACHE`
 - `version_check` `0.9.5`: `LICENSE-APACHE`
-- `wasip2` `1.0.4+wasi-0.2.12`: `LICENSE-APACHE`
 - `wasm-bindgen` `0.2.130`: `LICENSE-APACHE`
 - `wasm-bindgen-macro` `0.2.130`: `LICENSE-APACHE`
 - `wasm-bindgen-macro-support` `0.2.130`: `LICENSE-APACHE`
 - `wasm-bindgen-shared` `0.2.130`: `LICENSE-APACHE`
-- `wit-bindgen` `0.57.1`: `LICENSE-APACHE`
 
 ````text
                               Apache License
@@ -4687,7 +4454,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### License text 60 (SHA-256 `a825bd853ab71619a4923d7b4311221427848070ff44d990da39b0b274c1683f`)
+### License text 59 (SHA-256 `a825bd853ab71619a4923d7b4311221427848070ff44d990da39b0b274c1683f`)
 
 - `typenum` `1.20.1`: `LICENSE-MIT`
 
@@ -4715,7 +4482,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### License text 61 (SHA-256 `a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5`)
+### License text 60 (SHA-256 `a9040321c3712d8fd0b09cf52b17445de04a23a10165049ae187cd39e5c86be5`)
 
 - `block-buffer` `0.12.1`: `LICENSE-APACHE`
 - `const-oid` `0.10.3`: `LICENSE-APACHE`
@@ -4723,7 +4490,7 @@ SOFTWARE.
 - `crypto-common` `0.2.2`: `LICENSE-APACHE`
 - `digest` `0.11.3`: `LICENSE-APACHE`
 - `hybrid-array` `0.4.15`: `LICENSE-APACHE`
-- `sha2` `0.11.1`: `LICENSE-APACHE`
+- `sha2` `0.11.2`: `LICENSE-APACHE`
 
 ````text
                               Apache License
@@ -4929,9 +4696,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### License text 62 (SHA-256 `aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf`)
+### License text 61 (SHA-256 `aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf`)
 
-- `getrandom` `0.3.4`: `LICENSE-APACHE`
 - `getrandom` `0.4.3`: `LICENSE-APACHE`
 
 ````text
@@ -5138,7 +4904,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ````
 
-### License text 63 (SHA-256 `af59cea35d7f5e2777a713b8d155d65efa2c339eb43f3c14e868c6ac8506edad`)
+### License text 62 (SHA-256 `af59cea35d7f5e2777a713b8d155d65efa2c339eb43f3c14e868c6ac8506edad`)
 
 - `digest` `0.11.3`: `LICENSE-MIT`
 
@@ -5171,7 +4937,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 64 (SHA-256 `b1181a40b2a7b25cf66fd01481713bc1005df082c53ef73e851e55071b102744`)
+### License text 63 (SHA-256 `b1181a40b2a7b25cf66fd01481713bc1005df082c53ef73e851e55071b102744`)
 
 - `foldhash` `0.2.0`: `LICENSE`
 
@@ -5197,7 +4963,7 @@ the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ````
 
-### License text 65 (SHA-256 `b7e650f3fce5c53249d1cdc608b54df156a97edd636cf9d23498d0cfe7aec63e`)
+### License text 64 (SHA-256 `b7e650f3fce5c53249d1cdc608b54df156a97edd636cf9d23498d0cfe7aec63e`)
 
 - `version_check` `0.9.5`: `LICENSE-MIT`
 
@@ -5223,7 +4989,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 66 (SHA-256 `b9c981ef9c76c0188c3ea22dca3c54744ad228071229cde4ff532543e1146a88`)
+### License text 65 (SHA-256 `b9c981ef9c76c0188c3ea22dca3c54744ad228071229cde4ff532543e1146a88`)
 
 - `munge` `0.4.7`: `LICENSE`
 - `munge_macro` `0.4.7`: `LICENSE`
@@ -5238,9 +5004,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 67 (SHA-256 `bf7017a73a95ea63bf3716b13ec2bcd79c92942356e3408c6fb66332bad6d977`)
+### License text 66 (SHA-256 `bf7017a73a95ea63bf3716b13ec2bcd79c92942356e3408c6fb66332bad6d977`)
 
-- `zstd-sys` `2.1.3+zstd.1.5.7`: `LICENSE.BSD-3-Clause`
+- `zstd-sys` `2.2.0+zstd.1.6.0`: `LICENSE.BSD-3-Clause`
 
 ````text
 The auto-generated bindings are under the 3-clause BSD license:
@@ -5277,7 +5043,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### License text 68 (SHA-256 `c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b`)
+### License text 67 (SHA-256 `c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b`)
 
 - `windows-core` `0.62.2`: `license-apache-2.0`
 - `windows-implement` `0.60.2`: `license-apache-2.0`
@@ -5491,7 +5257,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    limitations under the License.
 ````
 
-### License text 69 (SHA-256 `c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383`)
+### License text 68 (SHA-256 `c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383`)
 
 - `windows-core` `0.62.2`: `license-mit`
 - `windows-implement` `0.60.2`: `license-mit`
@@ -5525,7 +5291,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     SOFTWARE
 ````
 
-### License text 70 (SHA-256 `c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08`)
+### License text 69 (SHA-256 `c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08`)
 
 - `anstream` `1.0.0`: `LICENSE-APACHE`
 - `anstyle` `1.0.14`: `LICENSE-APACHE`
@@ -5740,7 +5506,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    limitations under the License.
 ````
 
-### License text 71 (SHA-256 `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`)
+### License text 70 (SHA-256 `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`)
 
 - `sonic-rs` `0.5.12`: `licenses/LICENSE-sonic`
 
@@ -5948,7 +5714,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    limitations under the License.
 ````
 
-### License text 72 (SHA-256 `cb3c929a05e6cbc9de9ab06a4c57eeb60ca8c724bef6c138c87d3a577e27aa14`)
+### License text 71 (SHA-256 `cb3c929a05e6cbc9de9ab06a4c57eeb60ca8c724bef6c138c87d3a577e27aa14`)
 
 - `same-file` `1.0.6`: `LICENSE-MIT`
 - `winapi-util` `0.1.11`: `LICENSE-MIT`
@@ -5977,7 +5743,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ````
 
-### License text 73 (SHA-256 `cb5aedb296c5246d1f22e9099f925a65146f9f0d6b4eebba97fd27a6cdbbab2d`)
+### License text 72 (SHA-256 `cb5aedb296c5246d1f22e9099f925a65146f9f0d6b4eebba97fd27a6cdbbab2d`)
 
 - `winnow` `1.0.5`: `LICENSE-MIT`
 
@@ -6002,11 +5768,11 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 74 (SHA-256 `ce4868c8e4ebe47a7d4b3c93dbf6b802033e5ae2fa7638098173f80836daac60`)
+### License text 73 (SHA-256 `ce4868c8e4ebe47a7d4b3c93dbf6b802033e5ae2fa7638098173f80836daac60`)
 
-- `zstd` `0.14.4`: `LICENSE`
-- `zstd-safe` `8.3.0`: `LICENSE`
-- `zstd-sys` `2.1.3+zstd.1.5.7`: `LICENSE`
+- `zstd` `0.14.5`: `LICENSE`
+- `zstd-safe` `8.4.0`: `LICENSE`
+- `zstd-sys` `2.2.0+zstd.1.6.0`: `LICENSE`
 
 ````text
 BSD 3-Clause License
@@ -6039,7 +5805,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### License text 75 (SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`)
+### License text 74 (SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`)
 
 - `tinyvec` `1.13.3`: `LICENSE-APACHE.md`
 
@@ -6248,7 +6014,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    limitations under the License.
 ````
 
-### License text 76 (SHA-256 `d00db6780089a342323c989190482203a8f26f6291c5673f6c90a8584b16f207`)
+### License text 75 (SHA-256 `d00db6780089a342323c989190482203a8f26f6291c5673f6c90a8584b16f207`)
 
 - `faststr` `0.2.34`: `LICENSE-MIT`
 
@@ -6280,7 +6046,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 77 (SHA-256 `d027e91dbc9cdbb2f1190068e498bd6b61cff022b6a032b191021ba658d96111`)
+### License text 76 (SHA-256 `d027e91dbc9cdbb2f1190068e498bd6b61cff022b6a032b191021ba658d96111`)
 
 - `r-efi` `6.0.0`: `AUTHORS`
 
@@ -6362,7 +6128,7 @@ AUTHORS: (ordered alphabetically)
         Trevor Gross <tmgross@umich.edu>
 ````
 
-### License text 78 (SHA-256 `d2e7ec5355c96eeade56b09187ceb48a6a30299da3ce7531a66d3d11405ab963`)
+### License text 77 (SHA-256 `d2e7ec5355c96eeade56b09187ceb48a6a30299da3ce7531a66d3d11405ab963`)
 
 - `crypto-common` `0.2.2`: `LICENSE-MIT`
 
@@ -6394,7 +6160,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 79 (SHA-256 `da28ccc6b158fc2d8cccc74e99794b1cff1d29bd7bbeb019442fcf0c04c6cad9`)
+### License text 78 (SHA-256 `da28ccc6b158fc2d8cccc74e99794b1cff1d29bd7bbeb019442fcf0c04c6cad9`)
 
 - `iana-time-zone` `0.1.65`: `LICENSE-MIT`
 - `iana-time-zone-haiku` `0.1.2`: `LICENSE-MIT`
@@ -6427,7 +6193,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 80 (SHA-256 `db11fec9946737df39ca3898d9cd8c10ec6f6c3a884a6802b0ad0b81b4e8f23a`)
+### License text 79 (SHA-256 `db11fec9946737df39ca3898d9cd8c10ec6f6c3a884a6802b0ad0b81b4e8f23a`)
 
 - `typenum` `1.20.1`: `LICENSE`
 
@@ -6435,7 +6201,7 @@ DEALINGS IN THE SOFTWARE.
 MIT OR Apache-2.0
 ````
 
-### License text 81 (SHA-256 `e4c9b06fa850cb9b540a5e400e9f6394cf15efcf4098144de477d1d3dae10150`)
+### License text 80 (SHA-256 `e4c9b06fa850cb9b540a5e400e9f6394cf15efcf4098144de477d1d3dae10150`)
 
 - `utf8parse` `0.2.2`: `LICENSE-MIT`
 
@@ -6467,7 +6233,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 82 (SHA-256 `ecc269ef87fd38a1d98e30bfac9ba964a9dbd9315c3770fed98d4d7cb5882055`)
+### License text 81 (SHA-256 `ecc269ef87fd38a1d98e30bfac9ba964a9dbd9315c3770fed98d4d7cb5882055`)
 
 - `indexmap` `2.14.2`: `LICENSE-MIT`
 
@@ -6499,7 +6265,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 83 (SHA-256 `f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1`)
+### License text 82 (SHA-256 `f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1`)
 
 - `unicode-ident` `1.0.27`: `LICENSE-UNICODE`
 
@@ -6545,9 +6311,9 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 ````
 
-### License text 84 (SHA-256 `f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505`)
+### License text 83 (SHA-256 `f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505`)
 
-- `zstd-sys` `2.1.3+zstd.1.5.7`: `zstd/COPYING`
+- `zstd-sys` `2.2.0+zstd.1.6.0`: `zstd/COPYING`
 
 ````text
                     GNU GENERAL PUBLIC LICENSE
@@ -6891,7 +6657,7 @@ library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.
 ````
 
-### License text 85 (SHA-256 `fd80a26fbb3f644af1fa994134446702932968519797227e07a1368dea80f0bc`)
+### License text 84 (SHA-256 `fd80a26fbb3f644af1fa994134446702932968519797227e07a1368dea80f0bc`)
 
 - `tinyvec` `1.13.3`: `LICENSE-MIT.md`
 
@@ -6903,7 +6669,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 86 (SHA-256 `ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2`)
+### License text 85 (SHA-256 `ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2`)
 
 - `hashbrown` `0.17.2`: `LICENSE-MIT`
 
@@ -6935,88 +6701,6 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### License text 87 (SHA-256 `ff92bed461f50338dd703a9ba9aee496a425957873df1d91192776e4bdf5dda7`)
-
-- `r-efi` `5.3.0`: `AUTHORS`
-
-````text
-LICENSE:
-        This project is triple-licensed under the MIT License, the Apache
-        License, Version 2.0, and the GNU Lesser General Public License,
-        Version 2.1+.
-
-AUTHORS-MIT:
-        Permission is hereby granted, free of charge, to any person obtaining a
-        copy of this software and associated documentation files (the
-        "Software"), to deal in the Software without restriction, including
-        without limitation the rights to use, copy, modify, merge, publish,
-        distribute, sublicense, and/or sell copies of the Software, and to
-        permit persons to whom the Software is furnished to do so, subject to
-        the following conditions:
-
-        The above copyright notice and this permission notice shall be included
-        in all copies or substantial portions of the Software.
-
-        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-        OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-        MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-        IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-        CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-        TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-        SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-AUTHORS-ASL:
-        Licensed under the Apache License, Version 2.0 (the "License");
-        you may not use this file except in compliance with the License.
-        You may obtain a copy of the License at
-
-                http://www.apache.org/licenses/LICENSE-2.0
-
-        Unless required by applicable law or agreed to in writing, software
-        distributed under the License is distributed on an "AS IS" BASIS,
-        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-        See the License for the specific language governing permissions and
-        limitations under the License.
-
-AUTHORS-LGPL:
-        This program is free software; you can redistribute it and/or modify it
-        under the terms of the GNU Lesser General Public License as published
-        by the Free Software Foundation; either version 2.1 of the License, or
-        (at your option) any later version.
-
-        This program is distributed in the hope that it will be useful, but
-        WITHOUT ANY WARRANTY; without even the implied warranty of
-        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-        Lesser General Public License for more details.
-
-        You should have received a copy of the GNU Lesser General Public License
-        along with this program; If not, see <http://www.gnu.org/licenses/>.
-
-COPYRIGHT: (ordered alphabetically)
-        Copyright (C) 2017-2023 Red Hat, Inc.
-        Copyright (C) 2019-2023 Microsoft Corporation
-        Copyright (C) 2022-2023 David Rheinsberg
-
-AUTHORS: (ordered alphabetically)
-        Alex James <theracermaster@gmail.com>
-        Ayush Singh <ayushsingh1325@gmail.com>
-        Boris-Chengbiao Zhou <bobo1239@web.de>
-        Bret Barkelew <bret@corthon.com>
-        Christopher Zurcher <christopher.zurcher@microsoft.com>
-        David Rheinsberg <david@readahead.eu>
-        Dmitry Mostovenko <trueberserker@gmail.com>
-        Hiroki Tokunaga <tokusan441@gmail.com>
-        Joe Richey <joerichey@google.com>
-        John Schock <joschock@microsoft.com>
-        Michael Kubacki <michael.kubacki@microsoft.com>
-        Oliver Smith-Denny <osde@microsoft.com>
-        Richard Wiedenhöft <richard@wiedenhoeft.xyz>
-        Rob Bradford <robert.bradford@intel.com>, <rbradford@rivosinc.com>
-        Tom Gundersen <teg@jklm.no>
-        Trevor Gross <tmgross@umich.edu>
-````
-
 ## Dependencies without an included license text file
 
 The packages below do not contain standard LICENSE/COPYING/NOTICE files in their vendored directory. Their manifest-declared upstream licenses remain applicable; verify upstream terms before redistribution.
-

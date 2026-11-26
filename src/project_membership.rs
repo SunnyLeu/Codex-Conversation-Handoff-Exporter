@@ -63,6 +63,176 @@ pub(crate) fn read_stable_state(path: &Path) -> Result<Value> {
     Err(last.expect("three attempts"))
 }
 
+// In-memory only: preserve explicit assignment disagreement, not a new Codex field.
+pub(crate) const ASSIGNMENT_CONFLICTS: &str = "__exporter_sqlite_assignment_conflicts";
+
+/// Same effective registry for listing, selection, confirmation and write guard.
+pub(crate) fn read_effective_state(args: &crate::Args) -> Result<Value> {
+    let state_path = crate::project_state_path(args);
+    let home = state_path.parent().unwrap_or(Path::new("."));
+    read_state_with_sqlite(&state_path, home)
+}
+
+fn read_state_with_sqlite(state_path: &Path, home: &Path) -> Result<Value> {
+    let mut state = read_stable_state(state_path)?;
+    state
+        .as_object_mut()
+        .context("Invalid Codex global state object")?
+        .remove(ASSIGNMENT_CONFLICTS);
+    let Some(snapshot) = crate::sqlite_threads::load_project_snapshot(home)? else {
+        crate::console_ui::diagnostic(
+            "DEBUG",
+            "project.registry.sources",
+            serde_json::json!({
+                "project_registry": "json_legacy", "sqlite_project_schema": "absent"
+            }),
+        );
+        return Ok(state);
+    };
+    merge_sqlite_state(state, snapshot)
+}
+
+/// Exact IDs or verified aliases establish identity. SQLite's ordered root
+/// list replaces (never unions) stale JSON roots of matched projects.
+/// Unmatched legacy entries may predate migration; absence is not deletion
+/// evidence. Keep them compatible. New SQLite-only IDs are selectable without
+/// guessing identity by name/CWD. Preserve existing JSON sidebar visibility.
+fn merge_sqlite_state(
+    mut state: Value,
+    snapshot: crate::sqlite_threads::ProjectSnapshot,
+) -> Result<Value> {
+    if state.get("local-projects").is_none() {
+        state["local-projects"] = serde_json::json!({});
+    }
+    let legacy = registered_projects(&state)?;
+    let mut canonical = HashMap::<String, String>::new();
+    for p in &legacy {
+        for id in std::iter::once(&p.id).chain(p.app_server_ids.iter()) {
+            canonical.insert(id.clone(), p.id.clone());
+        }
+    }
+    let mut matched = HashSet::new();
+    let mut sqlite_ids = HashSet::new();
+    let mut sqlite_order = Vec::new();
+    let mut sqlite_only = Vec::new();
+    for p in snapshot.projects {
+        sqlite_ids.insert(p.id.clone());
+        let owner = canonical
+            .get(&p.id)
+            .cloned()
+            .unwrap_or_else(|| p.id.clone());
+        if !matched.insert(owner.clone()) {
+            bail!("Multiple SQLite projects claim the same registered identity: {owner}");
+        }
+        sqlite_order.push(owner.clone());
+        if state["local-projects"].get(&owner).is_none() {
+            sqlite_only.push(owner.clone());
+            state["local-projects"][&owner] = serde_json::json!({"id": owner});
+        }
+        let entry = &mut state["local-projects"][&owner];
+        let roots = serde_json::json!(p.roots);
+        if entry.get("rootPaths") != Some(&roots)
+            || entry.get("name").and_then(Value::as_str) != Some(&p.name)
+        {
+            crate::console_ui::diagnostic(
+                "DEBUG",
+                "project.registry.sqlite_override",
+                serde_json::json!({
+                    "project_id": owner, "sqlite_project_id": p.id,
+                    "json_root_paths": entry.get("rootPaths"), "sqlite_root_paths": roots,
+                }),
+            );
+        }
+        entry["rootPaths"] = roots;
+        entry["name"] = Value::String(p.name);
+        canonical.insert(p.id, owner);
+    }
+    if state.get("project-order").is_none() {
+        state["project-order"] = serde_json::json!(sqlite_order);
+    } else {
+        let order = state["project-order"]
+            .as_array_mut()
+            .context("Invalid project-order")?;
+        for id in &sqlite_only {
+            if !order.iter().any(|v| v.as_str() == Some(id)) {
+                order.push(Value::String(id.clone()));
+            }
+        }
+    }
+    let mut conflicts = serde_json::Map::new();
+    let mut added = 0usize;
+    let mut agreed = 0usize;
+    let count = snapshot.assignments.len();
+    let equivalent = |a: &str, b: &str| {
+        a == b
+            || canonical
+                .get(a)
+                .zip(canonical.get(b))
+                .is_some_and(|(x, y)| x == y)
+    };
+    if count != 0 && state.get("thread-project-assignments").is_none() {
+        state["thread-project-assignments"] = serde_json::json!({});
+    }
+    // SQLite NULL does not erase an existing JSON assignment. Check conflicts
+    // on the actual Root/child selection rather than rewriting source data.
+    for (id, sqlite_id) in snapshot.assignments {
+        let json_id = assigned_project(&state, &id).map(str::to_owned);
+        let orphan = !sqlite_ids.contains(&sqlite_id);
+        if orphan
+            || json_id
+                .as_deref()
+                .is_some_and(|old| !equivalent(old, &sqlite_id))
+        {
+            let details = serde_json::json!({"json": json_id, "sqlite": sqlite_id, "sqlite_project_missing": orphan});
+            crate::console_ui::diagnostic(
+                "DEBUG",
+                "project.registry.assignment_conflict",
+                serde_json::json!({"session_id": id, "evidence": details}),
+            );
+            conflicts.insert(id.clone(), details);
+        } else if json_id.is_some() {
+            agreed += 1;
+        }
+        if json_id.is_none() {
+            let assignments = state["thread-project-assignments"]
+                .as_object_mut()
+                .context("Invalid thread-project-assignments")?;
+            assignments.insert(id, serde_json::json!({"projectId": sqlite_id}));
+            added += 1;
+        }
+    }
+    let conflict_count = conflicts.len();
+    if !conflicts.is_empty() {
+        state[ASSIGNMENT_CONFLICTS] = Value::Object(conflicts);
+    }
+    let legacy_only = legacy.iter().filter(|p| !matched.contains(&p.id)).count();
+    crate::console_ui::diagnostic(
+        "DEBUG",
+        "project.registry.sources",
+        serde_json::json!({
+            "project_registry": "sqlite_with_json_compatibility", "sqlite_projects": matched.len(),
+            "legacy_only_projects": legacy_only, "sqlite_only_projects": sqlite_only.len(),
+            "sqlite_explicit_assignments": count, "sqlite_added_assignments": added,
+            "equivalent_explicit_assignments": agreed, "assignment_conflicts": conflict_count,
+        }),
+    );
+    Ok(state)
+}
+
+fn assignment_conflict<'a>(state: &'a Value, id: &str) -> Option<&'a Value> {
+    state
+        .get(ASSIGNMENT_CONFLICTS)
+        .and_then(|conflicts| conflicts.get(id))
+}
+fn ensure_assignment_consistent(state: &Value, id: &str) -> Result<()> {
+    if let Some(conflict) = assignment_conflict(state, id) {
+        bail!(
+            "Conflicting SQLite/JSON project assignment for Session {id}: {conflict}; refusing to guess project membership"
+        );
+    }
+    Ok(())
+}
+
 // The first canonical session_meta determines identity. Never let inherited
 // metadata or a later envelope override it. Legacy records without metadata
 // retain the existing behavior (not selected).
@@ -198,47 +368,32 @@ fn select_target_project(
     state: &Value,
     target: &str,
 ) -> Result<(String, HashSet<String>, HashSet<String>)> {
-    let local_projects = state
-        .get("local-projects")
-        .and_then(Value::as_object)
-        .ok_or_else(|| anyhow!("Missing local-projects in Codex global state"))?;
-    let mut matching_ids = Vec::new();
+    let projects = registered_projects(state)?;
+    let mut matching = Vec::new();
     let mut other_roots = HashSet::new();
-    for (id, project) in local_projects {
-        let roots = project
-            .get("rootPaths")
-            .and_then(Value::as_array)
-            .ok_or_else(|| anyhow!("project {id} has invalid rootPaths"))?;
-        let normalized: Vec<String> = roots
+    for project in &projects {
+        let normalized: Vec<String> = project
+            .root_paths
             .iter()
-            .filter_map(Value::as_str)
-            .map(project_path)
+            .map(|root| project_path(root))
             .collect();
         if normalized.iter().any(|cwd| cwd == target) {
-            matching_ids.push(id.clone());
+            matching.push(project);
         } else {
             other_roots.extend(normalized);
         }
     }
-    if matching_ids.len() != 1 {
+    if matching.len() != 1 {
         bail!(
             "Expected exactly one local Codex project with rootPaths containing the target CWD; found {}. Refusing to guess project identity",
-            matching_ids.len()
+            matching.len()
         );
     }
-    let legacy_id = matching_ids.remove(0);
-    let mut equivalent_ids = HashSet::from([legacy_id.clone()]);
-    if let Some(hosts) = state
-        .get("app-server-project-id-by-legacy-project-id-by-host")
-        .and_then(Value::as_object)
-    {
-        for mapping in hosts.values().filter_map(Value::as_object) {
-            if let Some(mapped) = value_str(mapping.get(&legacy_id)) {
-                equivalent_ids.insert(mapped.to_string());
-            }
-        }
-    }
-    Ok((legacy_id, equivalent_ids, other_roots))
+    let chosen = matching[0];
+    let equivalent_ids = std::iter::once(chosen.id.clone())
+        .chain(chosen.app_server_ids.iter().cloned())
+        .collect();
+    Ok((chosen.id.clone(), equivalent_ids, other_roots))
 }
 
 #[derive(Debug, Clone)]
@@ -337,8 +492,12 @@ pub(crate) fn registered_projects(state: &Value) -> Result<Vec<ProjectInfo>> {
     Ok(projects)
 }
 
+#[cfg(test)]
 pub(crate) fn list_projects(state_path: &Path) -> Result<Vec<ProjectInfo>> {
-    registered_projects(&read_stable_state(state_path)?)
+    registered_projects(&read_state_with_sqlite(
+        state_path,
+        state_path.parent().unwrap_or(Path::new(".")),
+    )?)
 }
 
 fn explicit_project(
@@ -406,7 +565,7 @@ pub(crate) fn is_default_project(
     project_id: &str,
     default_cwd: &str,
 ) -> Result<bool> {
-    let state = read_stable_state(state_path)?;
+    let state = read_state_with_sqlite(state_path, state_path.parent().unwrap_or(Path::new(".")))?;
     let (default_id, _, _) = select_target_project(&state, &project_path(default_cwd))?;
     let (requested_id, _, _, _, _) = explicit_project(&state, project_id)?;
     Ok(default_id == requested_id)
@@ -449,7 +608,7 @@ pub(crate) fn resolve(
     target_cwd: &str,
     requested_project_id: Option<&str>,
 ) -> Result<ProjectScope> {
-    let state = read_stable_state(state_path)?;
+    let state = read_state_with_sqlite(state_path, state_path.parent().unwrap_or(Path::new(".")))?;
     resolve_state(files, &state, target_cwd, requested_project_id)
 }
 
@@ -520,6 +679,7 @@ pub(crate) fn resolve_state(
     let mut cwd_fallback_roots = 0;
     let mut unknown = Vec::new();
     for meta in metas.values().filter(|meta| !meta.child) {
+        ensure_assignment_consistent(state, &meta.id)?;
         let assignment = assigned_project(&state, &meta.id);
         let projectless = explicit_projectless.contains(&meta.id);
         if projectless && assignment.is_some() {
@@ -577,10 +737,21 @@ pub(crate) fn resolve_state(
     let mut unresolved = Vec::new();
     for meta in metas.values().filter(|meta| meta.child) {
         let root = follow_to_root(&meta.id, &metas);
-        let directly_assigned_target =
-            assigned_project(&state, &meta.id).is_some_and(|project| project_ids.contains(project));
+        let conflict_targets_project =
+            assignment_conflict(state, &meta.id).is_some_and(|conflict| {
+                ["json", "sqlite"].iter().any(|key| {
+                    conflict
+                        .get(key)
+                        .and_then(Value::as_str)
+                        .is_some_and(|id| project_ids.contains(id))
+                })
+            });
+        let directly_assigned_target = conflict_targets_project
+            || assigned_project(&state, &meta.id)
+                .is_some_and(|project| project_ids.contains(project));
         if let Some(root) = root {
             if root_ids.contains(&root) {
+                ensure_assignment_consistent(state, &meta.id)?;
                 if explicit_projectless.contains(&meta.id) {
                     bail!(
                         "Child {} explicitly projectless but parent belongs to target",
@@ -604,6 +775,7 @@ pub(crate) fn resolve_state(
                     children += 1;
                 }
             } else if directly_assigned_target {
+                ensure_assignment_consistent(state, &meta.id)?;
                 bail!(
                     "Child {} assigned to target but parent belongs to another project",
                     meta.id
@@ -613,6 +785,7 @@ pub(crate) fn resolve_state(
             || fallback_roots.contains(&project_path(&meta.cwd))
             || shared_roots.contains(&project_path(&meta.cwd))
         {
+            ensure_assignment_consistent(state, &meta.id)?;
             if meta.guardian {
                 // Guardian output is excluded by contract, and an unattached
                 // Guardian cannot be integrated into an active Root. It may
@@ -667,6 +840,7 @@ pub(crate) fn resolve_independent(
     if !projectless.iter().any(|id| id.as_str() == Some(requested)) {
         bail!("Thread is not an explicitly visible independent conversation: {requested}");
     }
+    ensure_assignment_consistent(state, requested)?;
     if assigned_project(state, requested).is_some() {
         bail!("Conflicting projectless/project assignment for session {requested}");
     }
@@ -712,6 +886,7 @@ pub(crate) fn resolve_independent(
     let mut guardians = 0;
     for meta in metas.values().filter(|m| m.child) {
         if follow_to_root(&meta.id, &metas).as_deref() == Some(requested) {
+            ensure_assignment_consistent(state, &meta.id)?;
             if assigned_project(state, &meta.id).is_some() {
                 bail!(
                     "Child {} has a project assignment contradicting independent Root {requested}",
@@ -1005,6 +1180,263 @@ mod tests {
             .to_string()
             .contains("unresolved parent chains")
         );
+        fs::remove_dir_all(dir).unwrap();
+    }
+    fn modern_fixture() -> (crate::codex_paths::TempDir, PathBuf, Vec<PathBuf>) {
+        let dir = crate::codex_paths::TempDir::new("sqlite-project-membership").unwrap();
+        let state = dir.path().join(".codex-global-state.json");
+        let json = serde_json::json!({
+            "local-projects": {
+                "legacy-a": {"name":"Old A", "rootPaths":[r"D:\old",r"D:\retained"]},
+                "legacy-b": {"name":"B", "rootPaths":[r"D:\b"]},
+                "hidden": {"name":"Hidden", "rootPaths":[r"D:\hidden"]}
+            },
+            "app-server-project-id-by-legacy-project-id-by-host": {
+                "local:fixture": {"legacy-a":"app-a","legacy-b":"app-b","hidden":"app-hidden"}
+            },
+            "project-order": ["legacy-a", "legacy-b"],
+            "thread-project-assignments": {
+                "legacy-assigned":{"projectId":"legacy-a"},
+                "agreed":{"projectId":"legacy-a"},
+                "foreign":{"projectId":"legacy-b"}
+            },
+            "projectless-thread-ids":["independent"]
+        });
+        fs::write(&state, serde_json::to_vec(&json).unwrap()).unwrap();
+        crate::sqlite_threads::test_execute(dir.path(), &[
+            "CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT,position INTEGER)",
+            "CREATE TABLE project_roots(project_id TEXT,position INTEGER,path TEXT,PRIMARY KEY(project_id,position))",
+            "CREATE TABLE threads(id TEXT PRIMARY KEY,project_id TEXT)",
+            "INSERT INTO projects VALUES('app-a','Current A',0),('app-b','B',1),('app-hidden','Hidden',2),('sqlite-only','New',3)",
+            r"INSERT INTO project_roots VALUES('app-a',1,'D:\retained'),('app-a',0,'D:\new'),('app-b',0,'D:\b'),('app-hidden',0,'D:\hidden'),('sqlite-only',0,'D:\only')",
+            "INSERT INTO threads VALUES('new-root',NULL),('legacy-assigned',NULL),('agreed','app-a'),('sqlite-assigned','app-a'),('foreign','app-b'),('independent',NULL),('new-project',NULL)",
+        ]).unwrap();
+        let mut paths = Vec::new();
+        for (id, cwd) in [
+            ("new-root", r"D:\new"),
+            ("legacy-assigned", r"D:\worktree"),
+            ("agreed", r"D:\worktree2"),
+            ("sqlite-assigned", r"D:\worktree3"),
+            ("foreign", r"D:\new"),
+            ("independent", r"D:\new"),
+            ("new-project", r"D:\only"),
+            ("retained-root", r"D:\retained"),
+        ] {
+            paths.push(write_root(dir.path(), id, cwd));
+        }
+        (dir, state, paths)
+    }
+
+    fn write_root(dir: &Path, id: &str, cwd: &str) -> PathBuf {
+        let path = dir.join(format!("{id}.jsonl"));
+        fs::write(&path, format!("{}\n", serde_json::json!({"type":"session_meta","payload":{"id":id,"cwd":cwd,"thread_source":"user"}}))).unwrap();
+        path
+    }
+
+    #[test]
+    fn sqlite_root_update_recovers_unassigned_root_and_preserves_legacy_assignments() {
+        let (dir, state_path, files) = modern_fixture();
+        let raw = read_stable_state(&state_path).unwrap();
+        assert!(
+            resolve_state(&files, &raw, "", Some("legacy-a"))
+                .unwrap_err()
+                .to_string()
+                .contains("unknown project membership")
+        );
+        let original = fs::read(&state_path).unwrap();
+        let db_original = fs::read(dir.path().join("state_5.sqlite")).unwrap();
+        let effective = read_state_with_sqlite(&state_path, dir.path()).unwrap();
+        let scope = resolve_state(&files, &effective, "", Some("legacy-a")).unwrap();
+        assert_eq!(
+            scope.root_ids,
+            [
+                "new-root",
+                "legacy-assigned",
+                "agreed",
+                "sqlite-assigned",
+                "retained-root"
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+        );
+        assert_eq!((scope.explicit_roots, scope.cwd_fallback_roots), (3, 2));
+        assert_eq!(
+            resolve_state(&files, &effective, "", Some("app-a"))
+                .unwrap()
+                .root_ids,
+            scope.root_ids
+        );
+        let catalogue = crate::sidebar_targets::from_state(&effective, &HashMap::new()).unwrap();
+        let chosen = catalogue
+            .select(crate::sidebar_targets::Kind::Project, "legacy-a")
+            .unwrap();
+        assert_eq!(chosen.title, "Current A");
+        assert_eq!(chosen.detail, r"D:\new");
+        assert!(
+            catalogue
+                .select(crate::sidebar_targets::Kind::Project, "hidden")
+                .is_err()
+        );
+        assert!(
+            catalogue
+                .select(crate::sidebar_targets::Kind::Project, "sqlite-only")
+                .is_ok()
+        );
+        assert_eq!(
+            resolve_state(&files, &effective, "", Some("sqlite-only"))
+                .unwrap()
+                .root_ids,
+            HashSet::from(["new-project".to_owned()])
+        );
+        assert_eq!(
+            resolve_independent(&files, &effective, "independent")
+                .unwrap()
+                .root_ids,
+            HashSet::from(["independent".to_owned()])
+        );
+        assert_eq!(fs::read(&state_path).unwrap(), original);
+        assert_eq!(
+            fs::read(dir.path().join("state_5.sqlite")).unwrap(),
+            db_original
+        );
+    }
+
+    #[test]
+    fn sqlite_removed_roots_are_not_silently_restored_from_json() {
+        let (dir, state, mut files) = modern_fixture();
+        let effective = read_state_with_sqlite(&state, dir.path()).unwrap();
+        let project = registered_projects(&effective)
+            .unwrap()
+            .into_iter()
+            .find(|p| p.id == "legacy-a")
+            .unwrap();
+        assert_eq!(project.root_paths, [r"D:\new", r"D:\retained"]);
+        files.push(write_root(dir.path(), "removed-root", r"D:\old"));
+        let err = resolve_state(&files, &effective, "", Some("legacy-a"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("removed-root") && err.contains("unknown project membership"));
+        // An empty authoritative root list must also replace the old JSON list.
+        crate::sqlite_threads::test_execute(
+            dir.path(),
+            &["DELETE FROM project_roots WHERE project_id='app-a'"],
+        )
+        .unwrap();
+        let after = read_state_with_sqlite(&state, dir.path()).unwrap();
+        assert_eq!(
+            after["local-projects"]["legacy-a"]["rootPaths"],
+            serde_json::json!([])
+        );
+        assert_ne!(
+            crate::sidebar_targets::state_fingerprint(&effective).unwrap(),
+            crate::sidebar_targets::state_fingerprint(&after).unwrap()
+        );
+    }
+
+    #[test]
+    fn sqlite_explicit_assignment_conflicts_and_projectless_conflicts_are_rejected() {
+        let (dir, state, files) = modern_fixture();
+        crate::sqlite_threads::test_execute(
+            dir.path(),
+            &["UPDATE threads SET project_id='app-b' WHERE id='agreed'"],
+        )
+        .unwrap();
+        let effective = read_state_with_sqlite(&state, dir.path()).unwrap();
+        let err = resolve_state(&files, &effective, "", Some("legacy-a"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("Conflicting SQLite/JSON project assignment") && err.contains("agreed")
+        );
+        crate::sqlite_threads::test_execute(
+            dir.path(),
+            &[
+                "UPDATE threads SET project_id='app-a' WHERE id='agreed'",
+                "UPDATE threads SET project_id='app-a' WHERE id='independent'",
+            ],
+        )
+        .unwrap();
+        let effective = read_state_with_sqlite(&state, dir.path()).unwrap();
+        assert!(
+            resolve_independent(&files, &effective, "independent")
+                .unwrap_err()
+                .to_string()
+                .contains("Conflicting projectless/project assignment")
+        );
+        let catalogue = crate::sidebar_targets::from_state(&effective, &HashMap::new()).unwrap();
+        assert!(
+            catalogue
+                .select(
+                    crate::sidebar_targets::Kind::IndependentThread,
+                    "independent"
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn sqlite_shared_root_still_requires_explicit_membership() {
+        let (dir, state, files) = modern_fixture();
+        crate::sqlite_threads::test_execute(
+            dir.path(),
+            &[r"INSERT INTO project_roots VALUES('app-b',1,'D:\new')"],
+        )
+        .unwrap();
+        let effective = read_state_with_sqlite(&state, dir.path()).unwrap();
+        let err = resolve_state(&files, &effective, "", Some("legacy-a"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("new-root") && err.contains("shared cwd"));
+    }
+
+    #[test]
+    fn sqlite_orphan_assignment_and_duplicate_alias_do_not_guess() {
+        let (dir, state, files) = modern_fixture();
+        crate::sqlite_threads::test_execute(
+            dir.path(),
+            &["UPDATE threads SET project_id='missing' WHERE id='new-root'"],
+        )
+        .unwrap();
+        let effective = read_state_with_sqlite(&state, dir.path()).unwrap();
+        assert!(
+            resolve_state(&files, &effective, "", Some("legacy-a"))
+                .unwrap_err()
+                .to_string()
+                .contains("sqlite_project_missing")
+        );
+        crate::sqlite_threads::test_execute(
+            dir.path(),
+            &["INSERT INTO projects VALUES('legacy-a','Ambiguous',4)"],
+        )
+        .unwrap();
+        assert!(
+            read_state_with_sqlite(&state, dir.path())
+                .unwrap_err()
+                .to_string()
+                .contains("same registered identity")
+        );
+    }
+
+    #[test]
+    fn sqlite_legacy_schema_falls_back_but_partial_or_corrupt_schema_does_not() {
+        let (dir, state, _) = fixture();
+        let raw = read_stable_state(&state).unwrap();
+        assert_eq!(read_state_with_sqlite(&state, &dir).unwrap(), raw);
+        crate::sqlite_threads::test_execute(
+            &dir,
+            &["CREATE TABLE threads(id TEXT PRIMARY KEY,title TEXT)"],
+        )
+        .unwrap();
+        assert_eq!(read_state_with_sqlite(&state, &dir).unwrap(), raw);
+        crate::sqlite_threads::test_execute(
+            &dir,
+            &["CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT,position INTEGER)"],
+        )
+        .unwrap();
+        assert!(read_state_with_sqlite(&state, &dir).is_err());
+        fs::write(dir.join("state_5.sqlite"), b"not a database").unwrap();
+        assert!(read_state_with_sqlite(&state, &dir).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 }

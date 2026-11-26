@@ -26,6 +26,8 @@ unsafe extern "C" {
     fn sqlite3_step(statement: *mut c_void) -> c_int;
     fn sqlite3_finalize(statement: *mut c_void) -> c_int;
     fn sqlite3_column_text(statement: *mut c_void, column: c_int) -> *const u8;
+    fn sqlite3_column_type(statement: *mut c_void, column: c_int) -> c_int;
+    fn sqlite3_column_bytes(statement: *mut c_void, column: c_int) -> c_int;
     fn sqlite3_column_int(statement: *mut c_void, column: c_int) -> c_int;
     fn sqlite3_errmsg(db: *mut c_void) -> *const c_char;
     fn sqlite3_busy_timeout(db: *mut c_void, ms: c_int) -> c_int;
@@ -177,6 +179,238 @@ pub(crate) fn lookup_one(home: &Path, id: &str) -> Result<Option<ThreadRow>> {
     Ok(Some(row))
 }
 
+/// A single SQLite read transaction supplies both the current project registry
+/// and non-null explicit Thread assignments. A NULL assignment is not a
+/// projectless declaration (older clients still persist assignments in JSON).
+#[derive(Debug, Clone)]
+pub(crate) struct ProjectRow {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) roots: Vec<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ProjectSnapshot {
+    pub(crate) projects: Vec<ProjectRow>,
+    pub(crate) assignments: Vec<(String, String)>,
+}
+
+fn prepare(db: &Db, sql: &str) -> Result<Statement> {
+    let sql = CString::new(sql)?;
+    let mut ptr = std::ptr::null_mut();
+    let rc = unsafe { sqlite3_prepare_v2(db.0, sql.as_ptr(), -1, &mut ptr, std::ptr::null_mut()) };
+    if rc != 0 || ptr.is_null() {
+        if !ptr.is_null() {
+            unsafe { sqlite3_finalize(ptr) };
+        }
+        bail!(
+            "SQLite project query prepare failed ({rc}): {}",
+            message(db.0)
+        );
+    }
+    Ok(Statement(ptr))
+}
+
+fn open_database(path: &Path, flags: c_int) -> Result<Db> {
+    let filename = CString::new(
+        path.to_str()
+            .context("SQLite database path is not Unicode")?,
+    )?;
+    let mut raw = std::ptr::null_mut();
+    let rc = unsafe { sqlite3_open_v2(filename.as_ptr(), &mut raw, flags, std::ptr::null()) };
+    if raw.is_null() {
+        bail!("SQLite connection allocation failed ({rc})");
+    }
+    let db = Db(raw);
+    if rc != 0 {
+        bail!("SQLite open failed ({rc}): {}", message(db.0));
+    }
+    let rc = unsafe { sqlite3_busy_timeout(db.0, 1500) };
+    if rc != 0 {
+        bail!("SQLite busy timeout failed ({rc}): {}", message(db.0));
+    }
+    Ok(db)
+}
+
+fn execute(db: &Db, sql: &str) -> Result<()> {
+    let statement = prepare(db, sql)?;
+    let rc = unsafe { sqlite3_step(statement.0) };
+    if rc != 101 {
+        bail!("SQLite statement failed ({rc}): {}", message(db.0));
+    }
+    Ok(())
+}
+
+fn text_rows(db: &Db, sql: &str, columns: usize) -> Result<Vec<Vec<String>>> {
+    let statement = prepare(db, sql)?;
+    let mut rows = Vec::new();
+    loop {
+        let rc = unsafe { sqlite3_step(statement.0) };
+        if rc == 101 {
+            break;
+        }
+        if rc != 100 {
+            bail!("SQLite project query failed ({rc}): {}", message(db.0));
+        }
+        let mut row = Vec::with_capacity(columns);
+        for column in 0..columns as c_int {
+            // Reject unknown/null/non-text identity rather than silently
+            // converting it. Copy UTF-8 while SQLite owns the column buffer.
+            if unsafe { sqlite3_column_type(statement.0, column) } != 3 {
+                bail!("SQLite project query contains non-text column {column}");
+            }
+            let ptr = unsafe { sqlite3_column_text(statement.0, column) };
+            let len = unsafe { sqlite3_column_bytes(statement.0, column) };
+            if ptr.is_null() || len < 0 {
+                bail!("SQLite project query could not read column {column}");
+            }
+            let bytes = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
+            let value =
+                std::str::from_utf8(bytes).context("Invalid UTF-8 in SQLite project data")?;
+            if value.contains('\0') {
+                bail!("SQLite project query contains embedded NUL in column {column}");
+            }
+            row.push(value.to_owned());
+        }
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
+/// SQLite read-only connections can still create/update WAL-index sidecars.
+/// Query an owned copy instead, so even an inactive source DB is untouched.
+/// Allow an append-only WAL tail after capture (normal active Codex writes),
+/// but never a reset, truncation, rewritten prefix or changed main DB. A
+/// partial final WAL frame is interpreted by SQLite's own recovery rules.
+fn stable_project_copy(path: &Path) -> Result<crate::codex_paths::TempDir> {
+    let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
+    for attempt in 0..3 {
+        let original = std::fs::read(path).context("Read project database snapshot")?;
+        let wal_before = optional_bytes(&wal)?;
+        let main_unchanged = std::fs::read(path)? == original;
+        let wal_after = optional_bytes(&wal)?;
+        let wal_stable = match (&wal_before, &wal_after) {
+            (None, None) => true,
+            (Some(before), Some(after)) => {
+                before == after || (before.len() >= 32 && after.starts_with(before))
+            }
+            _ => false,
+        };
+        if main_unchanged && wal_stable {
+            let temp = crate::codex_paths::TempDir::new("project-registry")?;
+            std::fs::write(temp.path().join("state.sqlite"), &original)?;
+            if let Some(bytes) = &wal_before {
+                std::fs::write(temp.path().join("state.sqlite-wal"), bytes)?;
+            }
+            return Ok(temp);
+        }
+        if attempt < 2 {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+    }
+    bail!(
+        "Codex project database/WAL changed during capture; cannot obtain a consistent read-only snapshot: {}",
+        path.display()
+    )
+}
+
+pub(crate) fn load_project_snapshot(home: &Path) -> Result<Option<ProjectSnapshot>> {
+    let Some(path) = database_path(home)? else {
+        return Ok(None);
+    };
+    let copy = stable_project_copy(&path)?;
+    let db = open_database(&copy.path().join("state.sqlite"), 1).with_context(|| {
+        format!(
+            "Read isolated Codex project database snapshot of {}",
+            path.display()
+        )
+    })?;
+    // Establish a transaction before inspecting the schema, so roots and
+    // assignments cannot be assembled from two different WAL snapshots.
+    execute(&db, "BEGIN")?;
+    let tables = text_rows(
+        &db,
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('projects','project_roots','threads') ORDER BY name",
+        1,
+    )?;
+    let has = |name: &str| tables.iter().any(|row| row[0] == name);
+    if !has("projects") && !has("project_roots") {
+        return Ok(None); // explicitly observed legacy schema
+    }
+    if !has("projects") || !has("project_roots") || !has("threads") {
+        bail!(
+            "Incomplete SQLite project schema (projects/project_roots/threads): {}",
+            path.display()
+        );
+    }
+    let mut projects = Vec::new();
+    let mut index = HashMap::new();
+    for row in text_rows(
+        &db,
+        "SELECT id, name FROM projects ORDER BY position, id",
+        2,
+    )? {
+        let id = &row[0];
+        if id.trim().is_empty()
+            || id.chars().any(char::is_control)
+            || index.insert(id.clone(), projects.len()).is_some()
+        {
+            bail!("Invalid or duplicate SQLite project ID: {id:?}");
+        }
+        projects.push(ProjectRow {
+            id: id.clone(),
+            name: row[1].clone(),
+            roots: Vec::new(),
+        });
+    }
+    for row in text_rows(
+        &db,
+        "SELECT project_id, path FROM project_roots ORDER BY project_id, position",
+        2,
+    )? {
+        let idx = index
+            .get(&row[0])
+            .with_context(|| format!("SQLite project root has no registered owner: {}", row[0]))?;
+        if row[1].trim().is_empty() || row[1].chars().any(char::is_control) {
+            bail!("Invalid SQLite root path for project {}", row[0]);
+        }
+        projects[*idx].roots.push(row[1].clone());
+    }
+    // Older intermediate schemas may have the project registry but not the
+    // Thread project_id column. Inspect actual schema, not exception text.
+    let columns = text_rows(&db, "SELECT name FROM pragma_table_info('threads')", 1)?;
+    let mut assignments = Vec::new();
+    if columns.iter().any(|row| row[0] == "project_id") {
+        for row in text_rows(
+            &db,
+            "SELECT id, project_id FROM threads WHERE project_id IS NOT NULL ORDER BY id",
+            2,
+        )? {
+            if row
+                .iter()
+                .any(|v| v.trim().is_empty() || v.chars().any(char::is_control))
+            {
+                bail!("Invalid SQLite Thread/project assignment");
+            }
+            assignments.push((row[0].clone(), row[1].clone()));
+        }
+    }
+    // Drop the connection before its owned temporary directory.
+    Ok(Some(ProjectSnapshot {
+        projects,
+        assignments,
+    }))
+}
+
+#[cfg(test)]
+pub(crate) fn test_execute(home: &Path, statements: &[&str]) -> Result<()> {
+    let db = open_database(&home.join("state_5.sqlite"), 6)?;
+    for sql in statements {
+        execute(&db, sql)?;
+    }
+    Ok(())
+}
+
 fn optional_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
     match std::fs::read(path) {
         Ok(b) => Ok(Some(b)),
@@ -273,5 +507,82 @@ mod tests {
         let d = crate::codex_paths::TempDir::new("test-db").unwrap();
         std::fs::write(d.path().join("state_5.sqlite"), b"bad").unwrap();
         assert!(load(d.path()).is_err());
+    }
+    #[test]
+    fn project_snapshot_reads_committed_wal_without_source_write() {
+        let d = crate::codex_paths::TempDir::new("project-wal-test").unwrap();
+        let path = d.path().join("state_5.sqlite");
+        let writer = open_database(&path, 6).unwrap();
+        assert_eq!(
+            text_rows(&writer, "PRAGMA journal_mode=WAL", 1).unwrap()[0][0],
+            "wal"
+        );
+        for sql in [
+            "CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT,position INTEGER)",
+            "CREATE TABLE project_roots(project_id TEXT,position INTEGER,path TEXT,PRIMARY KEY(project_id,position))",
+            "CREATE TABLE threads(id TEXT PRIMARY KEY,project_id TEXT)",
+            "INSERT INTO projects VALUES('p','Current',0)",
+            r"INSERT INTO project_roots VALUES('p',1,'D:\old'),('p',0,'D:\new')",
+            "INSERT INTO threads VALUES('a','p'),('b',NULL)",
+        ] {
+            execute(&writer, sql).unwrap();
+        }
+        let wal = d.path().join("state_5.sqlite-wal");
+        let before = std::fs::read(&path).unwrap();
+        let wal_before = std::fs::read(&wal).unwrap();
+        let current = load_project_snapshot(d.path()).unwrap().unwrap();
+        assert_eq!(current.projects[0].roots, [r"D:\new", r"D:\old"]);
+        assert_eq!(current.assignments, [("a".into(), "p".into())]);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(std::fs::read(&wal).unwrap(), wal_before);
+        execute(&writer, "BEGIN").unwrap();
+        execute(&writer, "DELETE FROM project_roots").unwrap();
+        assert_eq!(
+            load_project_snapshot(d.path()).unwrap().unwrap().projects[0]
+                .roots
+                .len(),
+            2
+        );
+        execute(&writer, "COMMIT").unwrap();
+        assert!(
+            load_project_snapshot(d.path()).unwrap().unwrap().projects[0]
+                .roots
+                .is_empty()
+        );
+    }
+    #[test]
+    fn project_snapshot_does_not_create_source_wal_sidecars() {
+        let d = crate::codex_paths::TempDir::new("project-no-sidecars-test").unwrap();
+        let path = d.path().join("state_5.sqlite");
+        {
+            let db = open_database(&path, 6).unwrap();
+            assert_eq!(
+                text_rows(&db, "PRAGMA journal_mode=WAL", 1).unwrap()[0][0],
+                "wal"
+            );
+            for sql in [
+                "CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT,position INTEGER)",
+                "CREATE TABLE project_roots(project_id TEXT,position INTEGER,path TEXT,PRIMARY KEY(project_id,position))",
+                "CREATE TABLE threads(id TEXT PRIMARY KEY,project_id TEXT)",
+                "INSERT INTO projects VALUES('p','Current',0)",
+                r"INSERT INTO project_roots VALUES('p',0,'D:\new')",
+            ] {
+                execute(&db, sql).unwrap();
+            }
+        }
+        let roster = || -> std::collections::BTreeSet<_> {
+            std::fs::read_dir(d.path())
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect()
+        };
+        let before = roster();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(
+            load_project_snapshot(d.path()).unwrap().unwrap().projects[0].roots,
+            [r"D:\new"]
+        );
+        assert_eq!(roster(), before);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
 }

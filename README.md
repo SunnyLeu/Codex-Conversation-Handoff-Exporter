@@ -9,7 +9,7 @@
 在本儲存庫的 [Releases](https://github.com/SunnyLeu/Codex-Conversation-Handoff-Exporter/releases)
 下載 Windows x64 套件：
 
-`Codex-Conversation-Handoff-Exporter-2.3.0-windows-x64.zip`
+`Codex-Conversation-Handoff-Exporter-2.3.1-windows-x64.zip`
 
 解壓後執行 `Codex-Conversation-Handoff-Exporter.exe`。
 EXE 不依賴固定安裝目錄、捷徑的「開始位置」或相鄰資源檔，可以移至自己偏好的位置。
@@ -91,7 +91,10 @@ Windows 捷徑的「目標」可使用：
 預設讀取目前使用者的 `%USERPROFILE%\.codex`；
 有設定絕對路徑的 `CODEX_HOME` 時優先使用該位置，與 EXE 所在位置無關。
 
-首頁選單只讀側邊欄狀態與必要標題，不預先解析整個專案；若有 Codex SQLite Thread 資料庫，首頁亦以輕量唯讀查詢排除已不在資料庫或已封存的獨立對話。沒有 SQLite 資料庫時沿用既有狀態清單相容模式。
+首頁選單只讀側邊欄狀態、必要標題及專案登錄資料，不預先解析整個專案。若有 Codex SQLite Thread 資料庫，首頁亦以唯讀查詢排除已不在資料庫或已封存的獨立對話。
+
+專案登錄同時支援全域 JSON 與新版 SQLite。能以專案 ID 或既有 Legacy／App Server ID 映射確認為同一專案時，使用 SQLite `project_roots` 的目前路徑及順序，不重新加入已移除的 JSON 舊路徑。SQLite 查無非空的 Thread 專案指派不會抹除既有 JSON 明確指派；兩份明確指派互相矛盾時不猜測歸屬。只在無法證明明確指派且工作目錄是專案獨占根目錄時採用 CWD 比對，仍拒絕無法判定歸屬的根對話。
+沒有新版 SQLite 專案資料表時沿用 JSON 相容模式；沒有對應 SQLite 專案列的舊 JSON 登錄保留，不以缺列推定刪除。新版 SQLite 專案查詢從隔離的資料庫／WAL 快照進行，不在來源目錄建立 SQLite 輔助檔。
 按 `E` 後才驗證選定目標及讀取 Session。側邊欄狀態、索引或本機紀錄缺失時，
 程式會明確失敗，不會猜測其他 ID、固定路徑或對話歸屬。
 
@@ -143,7 +146,7 @@ target\x86_64-pc-windows-msvc\release\Codex-Conversation-Handoff-Exporter.exe
 
 ## DEBUG 診斷
 
-在程式啟動時於記憶體建立完整事件追蹤，涵蓋命令列選項、來源與目的地檢查、身分判斷、檔案處理、錯誤原因鏈與可取得的呼叫堆疊。當執行過程發生錯誤（即使後續恢復成功），才將先前及後續事件保存為 `%TEMP%\CodexHandoff-Diagnostics\v2.3.0-*.debug.jsonl`；完全沒有錯誤時不建立 DEBUG 檔案。程式不巡覽、不刪除歷史日誌，也不設自動清理期限。
+在程式啟動時於記憶體建立完整事件追蹤，涵蓋命令列選項、來源與目的地檢查、身分判斷、檔案處理、錯誤原因鏈與可取得的呼叫堆疊。當執行過程發生錯誤（即使後續恢復成功），才將先前及後續事件保存為 `%TEMP%\CodexHandoff-Diagnostics\v2.3.1-*.debug.jsonl`；完全沒有錯誤時不建立 DEBUG 檔案。程式不巡覽、不刪除歷史日誌，也不設自動清理期限。
 
 DEBUG 檔可能包含本機完整路徑、對話 ID、原始錯誤內容及相關資料。匯出失敗時，主控台會提供原因與診斷檔位置；使用 `--yes` 時不等待按鍵，回傳非零結束碼、stderr 和 `V2_RESULT` 失敗收據。
 

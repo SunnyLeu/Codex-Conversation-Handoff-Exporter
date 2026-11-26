@@ -332,7 +332,7 @@ try {
     # not a valid correctness test; verify identity and logical content instead.
     $reExportText = [IO.File]::ReadAllText($aPath, $Utf8)
     $reExport = $reExportText | ConvertFrom-Json -ErrorAction Stop
-    Check ([string]$reExport.conversation_id -eq $RootA -and [string]$reExport.exporter_version -eq '2.3.0') 'repeat export retains correct owned conversation ID and candidate version'
+    Check ([string]$reExport.conversation_id -eq $RootA -and [string]$reExport.exporter_version -eq '2.3.1') 'repeat export retains correct owned conversation ID and candidate version'
     Check (@($reExport.source_snapshot.physical_files).Count -eq 3) 'repeat export retains all three physical continuation source snapshots'
     foreach ($token in @('QUAL_ROOT_KEEP','QUAL_ROOT_KEEP2','QUAL_MIDDLE_KEEP','QUAL_LATEST_KEEP')) {
         Check ($reExportText.Contains($token)) "repeat export retains expected message $token"
@@ -380,7 +380,7 @@ try {
     $replyLogs = RunExport '08-async-question-replies' @('--thread-id',$RootReply,'--output-directory',$out,'--yes') $true
     $replyPath = FindHandoff $out $RootReply
     $replyJson = Get-Content -LiteralPath $replyPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    Check ($replyJson.exporter_version -eq '2.3.0') 'async reply EXE reports the candidate version'
+    Check ($replyJson.exporter_version -eq '2.3.1') 'async reply EXE reports the candidate version'
     $answered = @($replyJson.user_input_requests | Where-Object { $_.call_id -eq $replyCall })
     $pending = @($replyJson.user_input_requests | Where-Object { $_.call_id -eq $pendingCall })
     Check ($answered.Count -eq 1 -and $pending.Count -eq 1) 'both async requests retained'
@@ -429,7 +429,42 @@ try {
     $safeArgs = @('--project-id','qualified-project','--output-directory',$safeOut,'--yes')
     $null = RunExport '11-new-empty-destination' $safeArgs $true 2
     Check ((ListHandoffs $safeOut).Count -eq 2) 'new conversations export to fresh destination independently of old Handoffs'
-    WriteUtf8 (Join-Path $LogDirectory 'SYNTHETIC-E2E-PASS.txt') 'PASS: eleven executable scenarios including successful deleted/recreated same-title coexistence, real filename collision DEBUG, zero unsafe writes, and source protection.'
+    # A separately isolated SQLite registry whose current root differs from legacy JSON.
+    $registryHome = Join-Path $WorkDirectory 'sqlite-registry-home'
+    $registrySessions = Join-Path $registryHome 'sessions\2026\10\23'
+    $registryOut = Join-Path $WorkDirectory '12-sqlite-project-root-change'
+    foreach ($path in @($registrySessions,(Join-Path $registryHome 'attachments'),$registryOut)) { New-Item -ItemType Directory -Force -Path $path | Out-Null }
+    $registryState = [ordered]@{
+        'project-order'=@('legacy-moved'); 'pinned-project-ids'=@();
+        'local-projects'=@{'legacy-moved'=@{id='legacy-moved';name='Old Project';rootPaths=@('C:\synthetic-old')}};
+        'app-server-project-id-by-legacy-project-id-by-host'=@{'local:fixture'=@{'legacy-moved'='app-moved'}};
+        'projectless-thread-ids'=@(); 'thread-project-assignments'=@{}
+    }
+    $registryState['thread-project-assignments'][$RootA]=@{projectKind='local';projectId='legacy-moved'}
+    WriteUtf8 (Join-Path $registryHome '.codex-global-state.json') (Record $registryState)
+    $index = (Record @{id=$RootA;thread_name='Assigned legacy root'}) + (Record @{id=$RootB;thread_name='Unassigned new root'})
+    WriteUtf8 (Join-Path $registryHome 'session_index.jsonl') $index
+    $fixturePath = Join-Path (Split-Path -Parent $PSScriptRoot) 'fixtures\project-registry.sqlite.b64'
+    [IO.File]::WriteAllBytes((Join-Path $registryHome 'state_5.sqlite'),[Convert]::FromBase64String([IO.File]::ReadAllText($fixturePath)))
+    $Cwd='C:\synthetic-old'
+    WriteRollout $registrySessions "rollout-2026-10-23T10-05-55-$RootA.jsonl" ((Meta $RootA 0 '2026-10-23T10:05:55Z' $null)+(UserRow 1 'QUAL_LEGACY_ASSIGNED' '2026-10-23T10:05:56Z'))
+    $Cwd='C:\synthetic-new'
+    WriteRollout $registrySessions "rollout-2026-10-23T10-06-55-$RootB.jsonl" ((Meta $RootB 0 '2026-10-23T10:06:55Z' $null)+(UserRow 1 'QUAL_SQLITE_NEW_ROOT' '2026-10-23T10:06:56Z'))
+    $registryHashes=@{}
+    foreach ($f in @(Get-ChildItem -LiteralPath $registryHome -Recurse -Force -File)) { $registryHashes[$f.FullName]=Hash $f.FullName }
+    [Environment]::SetEnvironmentVariable('CODEX_HOME',$registryHome,'Process')
+    $listText=(& $Executable --developer-mode --list-projects --no-pause | Out-String)
+    $listExit=$LASTEXITCODE
+    WriteUtf8 (Join-Path $LogDirectory '12-list-projects-stdout.txt') $listText
+    Check ($listExit -eq 0 -and $listText.Contains('Project ID: legacy-moved') -and $listText.Contains('Root: "C:\\synthetic-new"') -and -not $listText.Contains('Root: "C:\\synthetic-old"')) 'developer project list displays the current SQLite root, not removed JSON root'
+    $null=RunExport '12-sqlite-project-root-change' @('--project-id','legacy-moved','--output-directory',$registryOut,'--yes') $true 2
+    Check ((ListHandoffs $registryOut).Count -eq 2) 'SQLite root change exports exactly two roots'
+    Check ([IO.File]::ReadAllText((FindHandoff $registryOut $RootA),$Utf8).Contains('QUAL_LEGACY_ASSIGNED')) 'legacy explicit assignment remains valid when SQLite project_id is NULL'
+    Check ([IO.File]::ReadAllText((FindHandoff $registryOut $RootB),$Utf8).Contains('QUAL_SQLITE_NEW_ROOT')) 'new SQLite root recovers unassigned root'
+    $afterFiles=@(Get-ChildItem -LiteralPath $registryHome -Recurse -Force -File)
+    Check ($afterFiles.Count -eq $registryHashes.Count) 'SQLite project reads do not create source sidecar files'
+    foreach ($f in $afterFiles) { Check ($registryHashes.ContainsKey($f.FullName) -and (Hash $f.FullName) -eq $registryHashes[$f.FullName]) "registry source preserved: $($f.Name)" }
+    WriteUtf8 (Join-Path $LogDirectory 'SYNTHETIC-E2E-PASS.txt') 'PASS: twelve executable export scenarios plus visible project list, including SQLite root change, legacy assignment, and unchanged sources.'
 } finally {
     [Environment]::SetEnvironmentVariable('CODEX_HOME',$originalCodeHome,'Process')
 }

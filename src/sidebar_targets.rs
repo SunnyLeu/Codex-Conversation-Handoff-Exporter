@@ -65,6 +65,7 @@ pub(crate) fn state_fingerprint(state: &Value) -> Result<String> {
         "app-server-project-id-by-legacy-project-id-by-host",
         "sidebar-project-thread-orders",
         "thread-project-membership-host-ids",
+        project_membership::ASSIGNMENT_CONFLICTS,
     ] {
         relevant.insert(key.into(), state.get(key).cloned().unwrap_or(Value::Null));
     }
@@ -101,8 +102,7 @@ fn string_list(state: &Value, key: &str, required: bool) -> Result<Vec<String>> 
 /// chooser, a lightweight SQLite point lookup removes stale global-state IDs.
 /// Explicit --project-id/--thread-id invocation keeps its export-time checks.
 pub(crate) fn load(args: &crate::Args) -> Result<Catalogue> {
-    let path = crate::project_state_path(args);
-    let state = project_membership::read_stable_state(&path)?;
+    let state = project_membership::read_effective_state(args)?;
     let independent = state
         .get("projectless-thread-ids")
         .and_then(Value::as_array)

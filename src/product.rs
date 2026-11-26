@@ -444,9 +444,7 @@ fn confirmation(
                             }
                         }
                         if existing_handoff {
-                            let state = crate::project_membership::read_stable_state(
-                                &crate::project_state_path(args),
-                            )?;
+                            let state = crate::project_membership::read_effective_state(args)?;
                             let files = crate::discover_rollouts(&args.sessions_root)?;
                             let scope = if target.kind == Kind::Project {
                                 crate::project_membership::resolve_state(

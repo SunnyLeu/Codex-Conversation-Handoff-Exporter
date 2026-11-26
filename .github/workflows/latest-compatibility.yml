@@ -172,7 +172,7 @@ jobs:
           $dir = Join-Path $env:RUNNER_TEMP 'latest-e2e'
           $logs = Join-Path $dir 'logs'
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Invoke-Synthetic-Regression.ps1 -Executable $exe -WorkDirectory (Join-Path $dir 'synthetic') -LogDirectory $logs
-          if ($LASTEXITCODE -ne 0) { throw '11 synthetic EXE cases failed' }
+          if ($LASTEXITCODE -ne 0) { throw '12 synthetic EXE cases failed' }
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Invoke-R9-Subagent-Regression.ps1 -Executable $exe -WorkDirectory (Join-Path $dir 'subagents') -LogDirectory $logs
           if ($LASTEXITCODE -ne 0) { throw 'Subagent EXE case failed' }
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Invoke-Schema-Regression.ps1 -Executable $exe -WorkDirectory (Join-Path $dir 'schema') -LogDirectory $logs
@@ -207,7 +207,7 @@ jobs:
             "Clippy: ${{ steps.clippy.outcome }}",
             "Windows unit tests: ${{ steps.unit.outcome }}",
             "Windows Release build: ${{ steps.build.outcome }}",
-            "11 synthetic + subagent + Schema/attachment E2E: ${{ steps.e2e.outcome }}",
+            "12 synthetic + subagent + Schema/attachment E2E: ${{ steps.e2e.outcome }}",
             'Real private Codex snapshot: NOT_RUN',
             'Automated merge: DISABLED; formal local Windows qualification remains required.'
           )
@@ -335,7 +335,7 @@ jobs:
 
             - Latest Rust: `${{ needs.prepare.outputs.rust_version }}` (MSRV synchronized)
             - Combined latest Cargo manifest + transitive lockfile, including incompatible major and pinned upgrades.
-            - Windows rustfmt / Clippy / unit / Release / 11 synthetic EXE + subagent + Schema and attachment tests: **${{ needs.prepare.outputs.test_status }}** in the originating Latest Compatibility workflow.
+            - Windows rustfmt / Clippy / unit / Release / 12 synthetic EXE + subagent + Schema and attachment tests: **${{ needs.prepare.outputs.test_status }}** in the originating Latest Compatibility workflow.
             - No README, release version, native library license, GitHub Release or Git tag was updated.
             - The workflow's test result and executable logs are preserved as artifacts.
             - Created or updated using a scoped GitHub App token so PR CI can run automatically; no manual CI approval is intended.

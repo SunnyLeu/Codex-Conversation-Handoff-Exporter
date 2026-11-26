@@ -150,7 +150,8 @@ struct Args {
     list_projects: bool,
 
     /// Read-only Codex project registry override; defaults to the state file
-    /// in the same .codex folder as the sessions directory.
+    /// in the same .codex folder as the sessions directory. The matching
+    /// SQLite registry is read beside the selected JSON registry.
     #[arg(long, conflicts_with = "legacy_cwd_only")]
     project_state: Option<PathBuf>,
 
@@ -17554,12 +17555,12 @@ fn build_all_candidates(
     if write_outputs {
         destination::validate_path(&args.output_directory, args)?;
     }
+    let mut membership_state = None;
     let project_scope = if args.legacy_cwd_only {
         println!("Project membership: explicit --legacy-cwd-only compatibility mode");
         None
     } else {
-        let path = project_state_path(args);
-        let state = project_membership::read_stable_state(&path)?;
+        let state = project_membership::read_effective_state(args)?;
         if let Some(expected) = &args.expected_state {
             if *expected != sidebar_targets::state_fingerprint(&state)? {
                 bail!("Codex 側邊欄狀態已變更，尚未寫入；請重新選擇目標");
@@ -17654,6 +17655,7 @@ fn build_all_candidates(
                 scope.unattached_guardians_skipped
             );
         }
+        membership_state = Some(state);
         Some(scope)
     };
 
@@ -17687,7 +17689,9 @@ fn build_all_candidates(
                 .as_ref()
                 .expect("product mode resolves a scope"),
             &title_index,
-            &project_membership::read_stable_state(&project_state_path(args))?,
+            membership_state
+                .as_ref()
+                .expect("product mode captures membership state"),
             guard_pool.as_ref(),
         )?)
     } else {
@@ -18692,16 +18696,18 @@ fn configure_runtime(args: &Args) {
 
 fn run(args: Args) -> Result<()> {
     if args.list_projects {
-        let entries = project_membership::list_projects(&project_state_path(&args))?;
-        println!("Codex registered local projects: {}", entries.len());
+        let entries = project_membership::registered_projects(
+            &project_membership::read_effective_state(&args)?,
+        )?;
+        std::println!("Codex registered local projects: {}", entries.len());
         for p in entries {
-            println!("Project ID: {}", p.id);
-            println!("  Name: {}", serde_json::to_string(&p.name)?);
+            std::println!("Project ID: {}", p.id);
+            std::println!("  Name: {}", serde_json::to_string(&p.name)?);
             for alias in p.app_server_ids {
-                println!("  App Server ID: {alias}");
+                std::println!("  App Server ID: {alias}");
             }
             for root in p.root_paths {
-                println!("  Root: {}", serde_json::to_string(&root)?);
+                std::println!("  Root: {}", serde_json::to_string(&root)?);
             }
         }
         return Ok(());

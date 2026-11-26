@@ -337,7 +337,7 @@ impl InputGuard {
     ) -> Result<()> {
         // This lookup also rejects stale sidebar targets, while tolerating
         // edits to unrelated menu entries and drafts.
-        let state = project_membership::read_stable_state(&crate::project_state_path(args))?;
+        let state = project_membership::read_effective_state(args)?;
         let catalogue = crate::sidebar_targets::from_state(&state, &HashMap::new())?;
         if let Some(project) = args.project_id.as_deref() {
             catalogue.select(crate::sidebar_targets::Kind::Project, project)?;
@@ -507,13 +507,41 @@ mod tests {
         (d, args, files)
     }
     fn start(args: &crate::Args, files: &[PathBuf]) -> InputGuard {
-        let state =
-            project_membership::read_stable_state(&crate::project_state_path(args)).unwrap();
+        let state = project_membership::read_effective_state(args).unwrap();
         let scope =
             project_membership::resolve_state(files, &state, "", args.project_id.as_deref())
                 .unwrap();
         let titles = crate::read_title_index(&args.session_index).unwrap();
         InputGuard::capture(args, &scope, &titles, &state).unwrap()
+    }
+
+    #[test]
+    fn sqlite_root_change_during_export_is_rejected() {
+        let _serial = TEST_LOCK.lock().unwrap();
+        let (_d, args, files) = fixture();
+        let home = args.sessions_root.parent().unwrap();
+        crate::sqlite_threads::test_execute(home, &[
+            "CREATE TABLE projects(id TEXT PRIMARY KEY,name TEXT,position INTEGER)",
+            "CREATE TABLE project_roots(project_id TEXT,position INTEGER,path TEXT,PRIMARY KEY(project_id,position))",
+            "CREATE TABLE threads(id TEXT PRIMARY KEY,project_id TEXT)",
+            "INSERT INTO projects VALUES('target','Target',0),('other','Other',1)",
+            r"INSERT INTO project_roots VALUES('target',0,'D:\target'),('other',0,'D:\other')",
+        ]).unwrap();
+        let guard = start(&args, &files);
+        crate::sqlite_threads::test_execute(
+            home,
+            &["UPDATE projects SET name='Unrelated' WHERE id='other'"],
+        )
+        .unwrap();
+        guard.verify(&args).unwrap();
+        let guard = start(&args, &files);
+        crate::sqlite_threads::test_execute(
+            home,
+            &[r"UPDATE project_roots SET path='D:\new-target' WHERE project_id='target'"],
+        )
+        .unwrap();
+        let err = guard.verify(&args).unwrap_err().to_string();
+        assert!(err.contains("根目錄或身分已變更"), "{err}");
     }
 
     #[test]
@@ -574,6 +602,12 @@ mod tests {
             "draft",
         ] {
             let (_d, args, files) = fixture();
+            if kind == "database" {
+                crate::sqlite_threads::test_execute(args.sessions_root.parent().unwrap(), &[
+                    "CREATE TABLE threads(id TEXT PRIMARY KEY, title TEXT, archived INTEGER, rollout_path TEXT)",
+                    "INSERT INTO threads VALUES('root-other','Old',0,'other.jsonl')",
+                ]).unwrap();
+            }
             let guard = start(&args, &files);
             match kind {
                 "rollout" => fs::write(&files[1], format!("{}{}", meta("root-other", "D:\\other"), "{\"type\":\"event_msg\",\"payload\":{}}\n")).unwrap(),
@@ -590,7 +624,7 @@ mod tests {
                     fs::write(path, value.to_string()).unwrap();
                 }
                 "attachment" => fs::write(args.attachment_root.join("unrelated.bin"), b"change").unwrap(),
-                "database" => fs::write(args.sessions_root.parent().unwrap().join("state_5.sqlite"), b"unrelated-wal").unwrap(),
+                "database" => crate::sqlite_threads::test_execute(args.sessions_root.parent().unwrap(), &["UPDATE threads SET title='New' WHERE id='root-other'"]).unwrap(),
                 "draft" => {
                     let path = crate::project_state_path(&args);
                     let mut value = project_membership::read_stable_state(&path).unwrap();

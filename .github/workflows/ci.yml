@@ -92,16 +92,16 @@ jobs:
           Write-Host "版本：$($output -join ' ')"
           Get-FileHash -LiteralPath $exe -Algorithm SHA256
 
-      # These three scripts are identical to those in the qualified Windows R1
+      # These three scripts are included in the Windows qualification
       # test package; no private Codex data is used on GitHub-hosted runners.
-      - name: Windows EXE 11 組合成回歸情境
+      - name: Windows EXE 12 組合成回歸情境
         shell: pwsh
         run: |
           $exe = [IO.Path]::GetFullPath('target/x86_64-pc-windows-msvc/release/Codex-Conversation-Handoff-Exporter.exe')
           $dir = Join-Path $env:RUNNER_TEMP 'codex-qualification'
           $logs = Join-Path $dir 'logs'
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Invoke-Synthetic-Regression.ps1 -Executable $exe -WorkDirectory (Join-Path $dir 'synthetic') -LogDirectory $logs
-          if ($LASTEXITCODE -ne 0) { throw '11 synthetic EXE scenarios failed; check attached diagnostics' }
+          if ($LASTEXITCODE -ne 0) { throw '12 synthetic EXE scenarios failed; check attached diagnostics' }
 
       - name: Windows EXE 子代理回歸
         shell: pwsh
